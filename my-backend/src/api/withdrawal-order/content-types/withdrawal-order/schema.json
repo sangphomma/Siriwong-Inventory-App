@@ -1,0 +1,26 @@
+{
+  "kind": "collectionType",
+  "collectionName": "withdrawal_orders",
+  "info": {
+    "singularName": "withdrawal-order",
+    "pluralName": "withdrawal-orders",
+    "displayName": "Withdrawal_Order"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "user_name": {
+      "type": "string"
+    },
+    "date": {
+      "type": "date"
+    },
+    "withdrawal_items": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::withdrawal-item.withdrawal-item"
+    }
+  }
+}

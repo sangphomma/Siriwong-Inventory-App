@@ -1,0 +1,24 @@
+{
+  "kind": "collectionType",
+  "collectionName": "withdrawal_items",
+  "info": {
+    "singularName": "withdrawal-item",
+    "pluralName": "withdrawal-items",
+    "displayName": "Withdrawal_Item"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "amount": {
+      "type": "integer"
+    },
+    "product": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::product.product",
+      "inversedBy": "withdrawal_items"
+    }
+  }
+}
