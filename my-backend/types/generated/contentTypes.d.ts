@@ -526,6 +526,41 @@ export interface ApiProductProduct extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiProjectSiteProjectSite extends Struct.CollectionTypeSchema {
+  collectionName: 'project_sites';
+  info: {
+    displayName: 'ProjectSite';
+    pluralName: 'project-sites';
+    singularName: 'project-site';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::project-site.project-site'
+    > &
+      Schema.Attribute.Private;
+    location: Schema.Attribute.Text;
+    name: Schema.Attribute.String;
+    project_status: Schema.Attribute.Enumeration<['active', 'closed']> &
+      Schema.Attribute.DefaultTo<'active'>;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    withdrawal_requests: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::withdrawal-request.withdrawal-request'
+    >;
+  };
+}
+
 export interface ApiWithdrawalItemWithdrawalItem
   extends Struct.CollectionTypeSchema {
   collectionName: 'withdrawal_items';
@@ -587,6 +622,48 @@ export interface ApiWithdrawalOrderWithdrawalOrder
       'oneToMany',
       'api::withdrawal-item.withdrawal-item'
     >;
+  };
+}
+
+export interface ApiWithdrawalRequestWithdrawalRequest
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'withdrawal_requests';
+  info: {
+    displayName: 'WithdrawalRequest';
+    pluralName: 'withdrawal-requests';
+    singularName: 'withdrawal-request';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    items: Schema.Attribute.Component<'inventory.request-item', true>;
+    job_no: Schema.Attribute.String;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::withdrawal-request.withdrawal-request'
+    > &
+      Schema.Attribute.Private;
+    note: Schema.Attribute.Text;
+    project_site: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::project-site.project-site'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    request_by: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    request_status: Schema.Attribute.Enumeration<
+      ['pending', 'approved', 'rejected', 'completed']
+    >;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
   };
 }
 
@@ -1088,6 +1165,10 @@ export interface PluginUsersPermissionsUser
       Schema.Attribute.SetMinMaxLength<{
         minLength: 3;
       }>;
+    withdrawal_requests: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::withdrawal-request.withdrawal-request'
+    >;
   };
 }
 
@@ -1105,8 +1186,10 @@ declare module '@strapi/strapi' {
       'api::category.category': ApiCategoryCategory;
       'api::location.location': ApiLocationLocation;
       'api::product.product': ApiProductProduct;
+      'api::project-site.project-site': ApiProjectSiteProjectSite;
       'api::withdrawal-item.withdrawal-item': ApiWithdrawalItemWithdrawalItem;
       'api::withdrawal-order.withdrawal-order': ApiWithdrawalOrderWithdrawalOrder;
+      'api::withdrawal-request.withdrawal-request': ApiWithdrawalRequestWithdrawalRequest;
       'plugin::content-releases.release': PluginContentReleasesRelease;
       'plugin::content-releases.release-action': PluginContentReleasesReleaseAction;
       'plugin::i18n.locale': PluginI18NLocale;

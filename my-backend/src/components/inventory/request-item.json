@@ -1,0 +1,24 @@
+{
+  "collectionName": "components_inventory_request_items",
+  "info": {
+    "displayName": "RequestItem"
+  },
+  "options": {},
+  "attributes": {
+    "product": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::product.product"
+    },
+    "qty_request": {
+      "type": "integer"
+    },
+    "qty_approved": {
+      "type": "integer"
+    },
+    "remark": {
+      "type": "string"
+    }
+  },
+  "config": {}
+}

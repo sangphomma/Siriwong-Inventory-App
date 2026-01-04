@@ -1,0 +1,35 @@
+{
+  "kind": "collectionType",
+  "collectionName": "project_sites",
+  "info": {
+    "singularName": "project-site",
+    "pluralName": "project-sites",
+    "displayName": "ProjectSite"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string"
+    },
+    "location": {
+      "type": "text"
+    },
+    "withdrawal_requests": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::withdrawal-request.withdrawal-request",
+      "mappedBy": "project_site"
+    },
+    "project_status": {
+      "type": "enumeration",
+      "default": "active",
+      "enum": [
+        "active",
+        "closed"
+      ]
+    }
+  }
+}

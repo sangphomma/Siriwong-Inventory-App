@@ -76,6 +76,12 @@
         "store_keeper",
         "technician"
       ]
+    },
+    "withdrawal_requests": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::withdrawal-request.withdrawal-request",
+      "mappedBy": "request_by"
     }
   }
 }
