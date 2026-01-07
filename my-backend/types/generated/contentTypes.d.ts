@@ -441,6 +441,7 @@ export interface ApiCategoryCategory extends Struct.CollectionTypeSchema {
     draftAndPublish: true;
   };
   attributes: {
+    category_id: Schema.Attribute.Integer;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -483,6 +484,48 @@ export interface ApiLocationLocation extends Struct.CollectionTypeSchema {
     name: Schema.Attribute.String;
     products: Schema.Attribute.Relation<'oneToMany', 'api::product.product'>;
     publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiPettyCashPettyCash extends Struct.CollectionTypeSchema {
+  collectionName: 'petty_cashes';
+  info: {
+    displayName: 'PettyCash';
+    pluralName: 'petty-cashes';
+    singularName: 'petty-cash';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    amount: Schema.Attribute.Decimal;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    date: Schema.Attribute.Date;
+    description: Schema.Attribute.Text;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::petty-cash.petty-cash'
+    > &
+      Schema.Attribute.Private;
+    product_image: Schema.Attribute.Media<'images' | 'files'>;
+    project_sites: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::project-site.project-site'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    receipt_image: Schema.Attribute.Media<'images' | 'files'>;
+    requested_bies: Schema.Attribute.Relation<
+      'oneToMany',
+      'plugin::users-permissions.user'
+    >;
+    slip_image: Schema.Attribute.Media<'images' | 'files'>;
+    tags: Schema.Attribute.Relation<'manyToMany', 'api::tag.tag'>;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -558,6 +601,35 @@ export interface ApiProjectSiteProjectSite extends Struct.CollectionTypeSchema {
       'oneToMany',
       'api::withdrawal-request.withdrawal-request'
     >;
+  };
+}
+
+export interface ApiTagTag extends Struct.CollectionTypeSchema {
+  collectionName: 'tags';
+  info: {
+    displayName: 'Tag';
+    pluralName: 'tags';
+    singularName: 'tag';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<'oneToMany', 'api::tag.tag'> &
+      Schema.Attribute.Private;
+    petty_cashes: Schema.Attribute.Relation<
+      'manyToMany',
+      'api::petty-cash.petty-cash'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    tagName: Schema.Attribute.String;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
   };
 }
 
@@ -1185,8 +1257,10 @@ declare module '@strapi/strapi' {
       'admin::user': AdminUser;
       'api::category.category': ApiCategoryCategory;
       'api::location.location': ApiLocationLocation;
+      'api::petty-cash.petty-cash': ApiPettyCashPettyCash;
       'api::product.product': ApiProductProduct;
       'api::project-site.project-site': ApiProjectSiteProjectSite;
+      'api::tag.tag': ApiTagTag;
       'api::withdrawal-item.withdrawal-item': ApiWithdrawalItemWithdrawalItem;
       'api::withdrawal-order.withdrawal-order': ApiWithdrawalOrderWithdrawalOrder;
       'api::withdrawal-request.withdrawal-request': ApiWithdrawalRequestWithdrawalRequest;

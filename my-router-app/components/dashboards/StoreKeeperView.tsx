@@ -1,81 +1,66 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../app/contexts/AuthContext';
 import { API_URL } from '../../constants/Config';
 
 interface StoreKeeperProps {
-  token?: string | null;
+  token: string | null;
 }
 
-export default function StoreKeeperView({ token: propToken }: StoreKeeperProps) {
+export default function StoreKeeperView({ token }: StoreKeeperProps) {
   const router = useRouter();
-  const { token: authToken } = useAuth();
-  const token = propToken || authToken;
-  
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (token) fetchPendingRequests();
-    }, [token])
-  );
-
-  const fetchPendingRequests = async () => {
+  // ฟังก์ชันดึงรายการใบเบิกที่ค้างอนุมัติ (Pending)
+  const fetchPendingRequests = useCallback(async () => {
+    if (!token) return;
     try {
       setLoading(true);
-      // ✅ ใช้ Query แบบเน้น populate ทุกอย่าง (เลิกใช้เครื่องหมาย * เพราะบางที Strapi งง)
-      const query = `filters[request_status][$eq]=pending&populate=items.product&populate=request_by&populate=project_site&sort=createdAt:desc`;
+      // ⭐ ปรับ Query เพื่อดึงชื่อ Username และชื่อ Site ให้ถูกต้องสำหรับ Strapi v5
+      const query = [
+        `filters[request_status][$eq]=pending`,
+        `populate[items][populate]=product`, 
+        `populate[request_by][fields][0]=username`,
+        `populate[project_site][fields][0]=name`,
+        `sort=createdAt:desc`
+      ].join('&');
       
       const res = await fetch(`${API_URL}/withdrawal-requests?${query}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
       const json = await res.json();
-      
-      // ลอง Log ดูใน Terminal ว่ามีข้อมูลมาไหม
-      console.log("Found Data Count:", json.data?.length);
       setRequests(json.data || []);
     } catch (error) {
-      console.error("Fetch Error:", error);
+      console.error("Fetch Pending Error:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
-  const handleAction = async (item: any, status: 'approved' | 'rejected') => {
-    const confirmMsg = status === 'approved' ? 'ยืนยันอนุมัติและตัดสต็อกสินค้า?' : 'ยืนยันการปฏิเสธใบเบิกนี้?';
+  // โหลดข้อมูลใหม่ทุกครั้งที่หน้าจอนี้ถูกโฟกัส
+  useFocusEffect(
+    useCallback(() => {
+      fetchPendingRequests();
+    }, [fetchPendingRequests])
+  );
+
+  // ⭐ ฟังก์ชันช่วยดึงชื่อแสดงผล (แก้ปัญหา "ไม่ระบุ")
+  const getDisplayName = (obj: any, type: 'user' | 'site') => {
+    if (!obj) return "ไม่ระบุ";
     
-    Alert.alert("ยืนยันรายการ", confirmMsg, [
-      { text: "ยกเลิก", style: "cancel" },
-      { text: "ตกลง", onPress: async () => {
-          try {
-            const res = await fetch(`${API_URL}/withdrawal-requests/${item.documentId}`, {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-              },
-              body: JSON.stringify({ data: { request_status: status } })
-            });
-
-            if (res.ok) {
-              Alert.alert("สำเร็จ", status === 'approved' ? "อนุมัติและตัดสต็อกแล้ว" : "ปฏิเสธรายการแล้ว");
-              fetchPendingRequests();
-            }
-          } catch (e) {
-            Alert.alert("ผิดพลาด", "ไม่สามารถบันทึกได้");
-          }
-      }}
-    ]);
-  };
-
-  // ✅ ฟังก์ชันช่วยดึงชื่อที่ "ขุด" เก่งที่สุด
-  const getDisplayName = (obj: any) => {
-    if (!obj) return null;
-    // ขุดจากทุกที่: ชั้นนอก, ชั้น attributes หรือชั้นย่อยๆ
-    return obj.username || obj.name || obj.attributes?.username || obj.attributes?.name || null;
+    // ตรวจสอบทั้งโครงสร้างปกติ และโครงสร้างแบบ attributes (Strapi v5)
+    if (type === 'user') {
+      return obj.username || obj.attributes?.username || "ไม่ระบุชื่อ";
+    }
+    if (type === 'site') {
+      return obj.name || obj.attributes?.name || "ไม่ระบุไซท์";
+    }
+    return "ไม่ระบุ";
   };
 
   const renderHeader = () => (
@@ -92,45 +77,16 @@ export default function StoreKeeperView({ token: propToken }: StoreKeeperProps) 
         </TouchableOpacity>
         <TouchableOpacity style={[styles.menuBtn, { backgroundColor: '#f59e0b' }]} onPress={() => router.push('/product/list')}>
           <Ionicons name="list" size={24} color="white" />
-          <Text style={styles.menuBtnText}>เช็คสต็อก</Text>
+          <Text style={styles.menuBtnText}>สต็อก</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.menuBtn, { backgroundColor: '#10b981' }]} onPress={() => router.push('/product/manage_requests' as any)}>
+          <Ionicons name="clipboard" size={24} color="white" />
+          <Text style={styles.menuBtnText}>จัดการใบเบิก</Text>
         </TouchableOpacity>
       </View>
-      <Text style={[styles.sectionTitle, { marginTop: 25 }]}>รายการรออนุมัติ 📦</Text>
+      <Text style={[styles.sectionTitle, { marginTop: 25 }]}>รายการรออนุมัติล่าสุด 📦</Text>
     </View>
   );
-
-  const renderItem = ({ item }: { item: any }) => {
-    const requester = getDisplayName(item.request_by) || 'ช่าง (ไม่ระบุชื่อ)';
-    const site = getDisplayName(item.project_site) || 'ไม่ระบุไซท์';
-
-    return (
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.jobNo}>{item.job_no}</Text>
-          <Text style={styles.userName}>โดย: {requester}</Text>
-        </View>
-        <View style={styles.siteInfo}>
-          <Ionicons name="location" size={16} color="#475569" />
-          <Text style={styles.siteText}>ไซท์: {site}</Text>
-        </View>
-        <View style={styles.itemContainer}>
-          {item.items?.map((li: any, i: number) => (
-            <Text key={i} style={styles.itemText}>
-              • {getDisplayName(li.product) || 'สินค้า'} x{li.qty_request}
-            </Text>
-          ))}
-        </View>
-        <View style={styles.btnRow}>
-          <TouchableOpacity style={[styles.btn, styles.btnReject]} onPress={() => handleAction(item, 'rejected')}>
-            <Text style={styles.btnTextRed}>❌ ปฏิเสธ</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.btn, styles.btnApprove]} onPress={() => handleAction(item, 'approved')}>
-            <Text style={styles.btnTextGreen}>✅ อนุมัติ</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  };
 
   return (
     <View style={styles.container}>
@@ -138,35 +94,58 @@ export default function StoreKeeperView({ token: propToken }: StoreKeeperProps) 
         data={requests}
         keyExtractor={(item) => (item.documentId || item.id).toString()}
         ListHeaderComponent={renderHeader}
-        renderItem={renderItem}
+        renderItem={({ item }) => (
+          <TouchableOpacity 
+            style={styles.card} 
+            onPress={() => router.push(`/product/approve/${item.documentId || item.id}` as any)}
+          >
+            <View style={styles.cardHeader}>
+              <Text style={styles.jobNo}>{item.job_no || 'No Job No.'}</Text>
+              <Text style={styles.userName}>👤 {getDisplayName(item.request_by, 'user')}</Text>
+            </View>
+            <Text style={styles.siteText}>📍 ไซท์: {getDisplayName(item.project_site, 'site')}</Text>
+            
+            <View style={styles.itemSummary}>
+              <Text style={styles.itemCount}>📦 {item.items?.length || 0} รายการสินค้า</Text>
+              <View style={styles.statusBadge}>
+                <Text style={styles.statusText}>รออนุมัติ</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        )}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchPendingRequests} />}
         contentContainerStyle={{ padding: 15 }}
-        ListEmptyComponent={!loading ? <Text style={styles.empty}>ไม่มีรายการค้างส่งครับ</Text> : null}
+        ListEmptyComponent={
+          !loading ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="checkmark-circle-outline" size={50} color="#cbd5e1" />
+              <Text style={styles.empty}>ไม่มีรายการค้างอนุมัติในขณะนี้</Text>
+            </View>
+          ) : (
+            <ActivityIndicator size="large" color="#00796B" style={{ marginTop: 20 }} />
+          )
+        }
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f1f5f9' },
+  container: { flex: 1, backgroundColor: '#f8fafc' },
   menuSection: { marginBottom: 10 },
   sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#1e293b', marginBottom: 12 },
-  menuGrid: { flexDirection: 'row', gap: 10 },
-  menuBtn: { flex: 1, padding: 15, borderRadius: 12, alignItems: 'center', justifyContent: 'center', elevation: 2 },
-  menuBtnText: { color: 'white', fontSize: 12, fontWeight: 'bold', marginTop: 5 },
-  card: { backgroundColor: 'white', borderRadius: 12, padding: 15, marginBottom: 15, elevation: 2 },
+  menuGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  menuBtn: { width: '23.5%', paddingVertical: 15, borderRadius: 12, alignItems: 'center', justifyContent: 'center', elevation: 1 },
+  menuBtnText: { color: 'white', fontSize: 10, fontWeight: 'bold', marginTop: 5 },
+  card: { backgroundColor: 'white', borderRadius: 12, padding: 15, marginBottom: 12, elevation: 2, shadowColor: '#000', shadowOpacity: 0.05 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   jobNo: { fontWeight: 'bold', color: '#00796B', fontSize: 15 },
-  userName: { color: '#64748b', fontSize: 12, fontWeight: 'bold' },
-  siteInfo: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 10 },
-  siteText: { fontSize: 14, color: '#475569' },
-  itemContainer: { backgroundColor: '#f8fafc', padding: 10, borderRadius: 8, marginBottom: 12 },
-  itemText: { fontSize: 14, color: '#334155' },
-  btnRow: { flexDirection: 'row', gap: 10 },
-  btn: { flex: 1, padding: 12, borderRadius: 8, alignItems: 'center' },
-  btnReject: { backgroundColor: '#fee2e2' },
-  btnApprove: { backgroundColor: '#dcfce7' },
-  btnTextRed: { color: '#991b1b', fontWeight: 'bold' },
-  btnTextGreen: { color: '#166534', fontWeight: 'bold' },
-  empty: { textAlign: 'center', marginTop: 50, color: '#94a3b8' }
+  userName: { color: '#64748b', fontSize: 12, fontWeight: '500' },
+  siteText: { fontSize: 13, color: '#475569', marginBottom: 10 },
+  itemSummary: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 10, alignItems: 'center' },
+  itemCount: { fontSize: 13, color: '#64748b' },
+  statusBadge: { backgroundColor: '#fff7ed', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#ffedd5' },
+  statusText: { fontSize: 11, color: '#c2410c', fontWeight: 'bold' },
+  emptyContainer: { alignItems: 'center', marginTop: 60 },
+  empty: { textAlign: 'center', marginTop: 10, color: '#94a3b8', fontSize: 14 }
 });

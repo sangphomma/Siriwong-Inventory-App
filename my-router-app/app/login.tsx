@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 // 1. เปลี่ยนการ import: ไม่ใช้ AsyncStorage โดยตรงแล้ว แต่เรียกผ่าน Context แทน
-import { useAuth } from './contexts/AuthContext'; 
+import { useAuth } from '../contexts/AuthContext'; 
 import { API_URL } from '@/constants/Config';
 
 export default function LoginScreen() {

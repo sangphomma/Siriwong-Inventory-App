@@ -1,36 +1,55 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router'; // เพิ่ม useRouter, useSegments
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 
-// Import hooks และ AuthContext (ใช้ path แบบนี้ถูกต้องแล้วครับ)
 import { useColorScheme } from '../hooks/use-color-scheme';
-import { AuthProvider } from './contexts/AuthContext'; 
+import { AuthProvider, useAuth } from '../contexts/AuthContext'; // เพิ่ม useAuth
 
-// สั่งให้ Splash Screen ค้างไว้ก่อน จนกว่าเราจะสั่งปิด
 SplashScreen.preventAutoHideAsync();
 
-export default function RootLayout() {
+// สร้าง Component แยกออกมาเพื่อใช้ Hook useAuth ได้
+function RootLayoutNav() {
+  const { user, isLoading } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
   const colorScheme = useColorScheme();
-  
-  // *** จุดที่แก้: ลบโค้ด useFonts ออกไปเลย เพราะเราไม่มีไฟล์ฟอนต์ ***
 
   useEffect(() => {
-    // สั่งปิดหน้าจอโหลด (Splash Screen) ทันทีที่เปิดแอป
+    if (isLoading) return;
+
+    // ตรวจสอบว่าผู้ใช้อยู่ในกลุ่มหน้า (tabs) หรือไม่
+    const inAuthGroup = segments[0] === '(tabs)';
+
+    if (!user && inAuthGroup) {
+      // ถ้าไม่มี User และพยายามเข้าหน้า Tabs ให้ส่งไปหน้า Login
+      router.replace('/login');
+    } else if (user && segments[0] === 'login') {
+      // ถ้ามี User แล้วแต่ยังอยู่ที่หน้า Login ให้ส่งไปหน้าหลัก
+      router.replace('/');
+    }
+  }, [user, isLoading, segments]);
+
+  return (
+    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <Stack>
+        <Stack.Screen name="login" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="+not-found" />
+      </Stack>
+    </ThemeProvider>
+  );
+}
+
+export default function RootLayout() {
+  useEffect(() => {
     SplashScreen.hideAsync();
   }, []);
 
   return (
     <AuthProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="+not-found" />
-          {/* หน้า Login */}
-          <Stack.Screen name="login" options={{ headerShown: false }} />
-        </Stack>
-      </ThemeProvider>
+      <RootLayoutNav />
     </AuthProvider>
   );
 }

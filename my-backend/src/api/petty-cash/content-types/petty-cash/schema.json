@@ -1,0 +1,64 @@
+{
+  "kind": "collectionType",
+  "collectionName": "petty_cashes",
+  "info": {
+    "singularName": "petty-cash",
+    "pluralName": "petty-cashes",
+    "displayName": "PettyCash"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "amount": {
+      "type": "decimal"
+    },
+    "description": {
+      "type": "text"
+    },
+    "date": {
+      "type": "date"
+    },
+    "slip_image": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images",
+        "files"
+      ]
+    },
+    "receipt_image": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images",
+        "files"
+      ]
+    },
+    "product_image": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images",
+        "files"
+      ]
+    },
+    "requested_bies": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "plugin::users-permissions.user"
+    },
+    "project_sites": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::project-site.project-site"
+    },
+    "tags": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::tag.tag",
+      "inversedBy": "petty_cashes"
+    }
+  }
+}

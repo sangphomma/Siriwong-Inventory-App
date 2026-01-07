@@ -19,6 +19,9 @@
       "relation": "oneToMany",
       "target": "api::product.product",
       "mappedBy": "category"
+    },
+    "category_id": {
+      "type": "integer"
     }
   }
 }
