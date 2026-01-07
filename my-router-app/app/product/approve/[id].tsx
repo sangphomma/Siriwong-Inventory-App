@@ -8,6 +8,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../contexts/AuthContext';
 import { API_URL } from '../../../constants/Config';
 
+// 📦 Import สำหรับ Print PDF (ต้องลง expo-print expo-sharing แล้ว)
+import * as Print from 'expo-print';
+import { shareAsync } from 'expo-sharing';
+
 export default function ApproveRequestScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
@@ -16,7 +20,6 @@ export default function ApproveRequestScreen() {
   const [request, setRequest] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  // ⭐ เพิ่ม State สำหรับใส่หมายเหตุเวลาปฏิเสธ
   const [rejectRemark, setRejectRemark] = useState('');
 
   const fetchRequestDetail = useCallback(async () => {
@@ -44,6 +47,122 @@ export default function ApproveRequestScreen() {
     if (type === 'site') return obj.name || obj.attributes?.name || "ไม่ระบุไซท์";
     if (type === 'product') return obj.name || obj.attributes?.name || "สินค้าไม่มีชื่อ";
     return "ไม่ระบุ";
+  };
+
+  // ---------------------------------------------------------
+  // 🖨️ ฟังก์ชันสร้าง PDF ใบเบิก (A4 Form)
+  // ---------------------------------------------------------
+  const handlePrint = async () => {
+    if (!request) return;
+
+    // เตรียมข้อมูลสำหรับ HTML
+    const requestDate = new Date(request.createdAt).toLocaleDateString('th-TH');
+    const jobNo = request.job_no || '-';
+    const requesterName = getDisplayName(request.request_by, 'user');
+    const siteName = getDisplayName(request.project_site, 'site');
+
+    // สร้างแถวรายการสินค้า
+    const itemsHtml = request.items?.map((item: any, index: number) => `
+      <tr>
+        <td style="text-align: center;">${index + 1}</td>
+        <td>${getDisplayName(item.product, 'product')}</td>
+        <td style="text-align: center;">${item.qty_request || 0}</td>
+        <td style="text-align: center;">หน่วย</td> 
+        <td style="text-align: center;"></td> </tr>
+    `).join('') || '<tr><td colspan="5" style="text-align:center">ไม่มีรายการ</td></tr>';
+
+    const html = `
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: 'Helvetica', sans-serif; padding: 40px; }
+            .header { text-align: center; margin-bottom: 30px; }
+            .company-name { font-size: 24px; font-weight: bold; margin-bottom: 5px; }
+            .doc-title { font-size: 18px; font-weight: bold; text-decoration: underline; margin-bottom: 20px; }
+            
+            .info-section { width: 100%; margin-bottom: 20px; }
+            .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
+            
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; margin-bottom: 40px; }
+            th, td { border: 1px solid #000; padding: 10px; font-size: 14px; }
+            th { background-color: #f0f0f0; text-align: center; }
+            
+            .signature-section { 
+              display: flex; 
+              justify-content: space-between; 
+              margin-top: 80px; 
+              padding-left: 20px; 
+              padding-right: 20px;
+            }
+            .signature-box { text-align: center; width: 40%; }
+            .line { border-bottom: 1px dotted #000; height: 30px; margin-bottom: 10px; }
+            .label { font-size: 14px; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          
+          <div class="header">
+            <div class="company-name">บริษัท ศิริวงษ์ กรุ๊ป จำกัด</div>
+            <div>Siriwong Group Co., Ltd.</div>
+          </div>
+
+          <div style="text-align: center;">
+            <div class="doc-title">ใบเบิกวัสดุ-อุปกรณ์ (Withdrawal Request)</div>
+          </div>
+
+          <div class="info-section">
+            <div class="info-row">
+              <span><strong>เลขที่ใบเบิก (Job No):</strong> ${jobNo}</span>
+              <span><strong>วันที่ (Date):</strong> ${requestDate}</span>
+            </div>
+            <div class="info-row">
+              <span><strong>ผู้เบิก (Requester):</strong> ${requesterName}</span>
+              <span><strong>นำไปใช้ที่ (Site):</strong> ${siteName}</span>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 10%;">ลำดับ</th>
+                <th style="width: 50%;">รายการวัสดุ-อุปกรณ์</th>
+                <th style="width: 15%;">จำนวน</th>
+                <th style="width: 10%;">หน่วย</th>
+                <th style="width: 15%;">หมายเหตุ</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+
+          <div class="signature-section">
+            <div class="signature-box">
+              <div class="line"></div>
+              <div class="label">( ${requesterName} )</div>
+              <div>ผู้เบิกของ (Requester)</div>
+              <div>วันที่ ....../....../......</div>
+            </div>
+
+            <div class="signature-box">
+              <div class="line"></div>
+              <div class="label">( ........................................ )</div>
+              <div>ผู้จ่ายอุปกรณ์ (Store Keeper)</div>
+              <div>วันที่ ....../....../......</div>
+            </div>
+          </div>
+
+        </body>
+      </html>
+    `;
+
+    try {
+      const { uri } = await Print.printToFileAsync({ html });
+      await shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
+    } catch (error) {
+      Alert.alert("Error", "ไม่สามารถสร้าง PDF ได้");
+    }
   };
 
   const handleApprove = async () => {
@@ -79,7 +198,6 @@ export default function ApproveRequestScreen() {
     ]);
   };
 
-  // ⭐ ฟังก์ชันปฏิเสธที่แก้ไขแล้ว
   const handleReject = async () => {
     if (!rejectRemark.trim()) {
       Alert.alert("แจ้งเตือน", "กรุณาระบุเหตุผลที่ปฏิเสธใบเบิกนี้ในช่องหมายเหตุด้วยครับ");
@@ -114,8 +232,19 @@ export default function ApproveRequestScreen() {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.headerCard}>
-        <Text style={styles.jobNo}>ใบเบิกเลขที่: {request?.job_no}</Text>
-        <Text style={styles.subInfo}>👤 ผู้เบิก: {getDisplayName(request?.request_by, 'user')}</Text>
+        {/* ส่วนหัวของการ์ด + ปุ่ม Print */}
+        <View style={styles.headerRow}>
+           <View>
+              <Text style={styles.jobNo}>ใบเบิกเลขที่: {request?.job_no}</Text>
+              <Text style={styles.subInfo}>👤 ผู้เบิก: {getDisplayName(request?.request_by, 'user')}</Text>
+           </View>
+           
+           {/* ⭐ ปุ่ม Print PDF */}
+           <TouchableOpacity onPress={handlePrint} style={styles.printBtn}>
+             <Ionicons name="print-outline" size={28} color="#00796B" />
+           </TouchableOpacity>
+        </View>
+
         <Text style={styles.subInfo}>📍 ไซท์: {getDisplayName(request?.project_site, 'site')}</Text>
         <View style={styles.statusLabel}><Text style={styles.statusText}>{request?.request_status === 'pending' ? 'รอตรวจสอบ' : request?.request_status}</Text></View>
       </View>
@@ -143,7 +272,7 @@ export default function ApproveRequestScreen() {
           <View style={styles.buttonGroup}>
             <TouchableOpacity 
               style={[styles.btn, styles.rejectBtn]} 
-              onPress={handleReject} // ⭐ เชื่อมต่อฟังก์ชันแล้ว
+              onPress={handleReject}
               disabled={submitting}
             >
               <Text style={styles.btnText}>ปฏิเสธใบเบิก</Text>
@@ -167,7 +296,11 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc', padding: 15 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   headerCard: { backgroundColor: 'white', padding: 20, borderRadius: 15, marginBottom: 20, elevation: 2 },
-  jobNo: { fontSize: 20, fontWeight: 'bold', color: '#1e293b', marginBottom: 10 },
+  // ⭐ Style ใหม่สำหรับจัดแถวหัวข้อ
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }, 
+  printBtn: { padding: 5 },
+  
+  jobNo: { fontSize: 20, fontWeight: 'bold', color: '#1e293b', marginBottom: 5 },
   subInfo: { fontSize: 15, color: '#475569', marginBottom: 6 },
   statusLabel: { alignSelf: 'flex-start', backgroundColor: '#fff7ed', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, marginTop: 5 },
   statusText: { color: '#c2410c', fontWeight: 'bold', fontSize: 12 },

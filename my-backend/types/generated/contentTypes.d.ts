@@ -594,6 +594,10 @@ export interface ApiProjectSiteProjectSite extends Struct.CollectionTypeSchema {
     project_status: Schema.Attribute.Enumeration<['active', 'closed']> &
       Schema.Attribute.DefaultTo<'active'>;
     publishedAt: Schema.Attribute.DateTime;
+    return_requests: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::return-request.return-request'
+    >;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -601,6 +605,49 @@ export interface ApiProjectSiteProjectSite extends Struct.CollectionTypeSchema {
       'oneToMany',
       'api::withdrawal-request.withdrawal-request'
     >;
+  };
+}
+
+export interface ApiReturnRequestReturnRequest
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'return_requests';
+  info: {
+    displayName: 'ReturnRequest';
+    pluralName: 'return-requests';
+    singularName: 'return-request';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    items: Schema.Attribute.Component<'inventory.request-item', true>;
+    job_no: Schema.Attribute.String;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::return-request.return-request'
+    > &
+      Schema.Attribute.Private;
+    note: Schema.Attribute.Text;
+    project_site: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::project-site.project-site'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    return_by: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    return_status: Schema.Attribute.Enumeration<
+      ['pending', 'approved', 'rejected']
+    > &
+      Schema.Attribute.DefaultTo<'pending'>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
   };
 }
 
@@ -1224,6 +1271,10 @@ export interface PluginUsersPermissionsUser
     provider: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
     resetPasswordToken: Schema.Attribute.String & Schema.Attribute.Private;
+    return_requests: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::return-request.return-request'
+    >;
     role: Schema.Attribute.Relation<
       'manyToOne',
       'plugin::users-permissions.role'
@@ -1260,6 +1311,7 @@ declare module '@strapi/strapi' {
       'api::petty-cash.petty-cash': ApiPettyCashPettyCash;
       'api::product.product': ApiProductProduct;
       'api::project-site.project-site': ApiProjectSiteProjectSite;
+      'api::return-request.return-request': ApiReturnRequestReturnRequest;
       'api::tag.tag': ApiTagTag;
       'api::withdrawal-item.withdrawal-item': ApiWithdrawalItemWithdrawalItem;
       'api::withdrawal-order.withdrawal-order': ApiWithdrawalOrderWithdrawalOrder;

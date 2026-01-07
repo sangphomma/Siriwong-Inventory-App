@@ -1,12 +1,16 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { 
   View, Text, StyleSheet, FlatList, ActivityIndicator, 
-  RefreshControl, TouchableOpacity, TextInput 
+  RefreshControl, TouchableOpacity, TextInput, Alert, Share 
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { API_URL } from '../../constants/Config';
+
+// 📦 Import สำหรับ PDF และ Print
+import * as Print from 'expo-print';
+import { shareAsync } from 'expo-sharing';
 
 export default function ManageRequestsScreen() {
   const router = useRouter();
@@ -18,11 +22,15 @@ export default function ManageRequestsScreen() {
   const [statusFilter, setStatusFilter] = useState('pending');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // 🔔 LINE TOKEN: (ใส่ Token ของกลุ่มไลน์ที่นี่)
+  // วิธีขอ Token: ไปที่ https://notify-bot.line.me/my/ -> Generate Token
+  const LINE_NOTIFY_TOKEN = "วาง_TOKEN_ของคุณที่นี่"; 
+
   const fetchAllRequests = useCallback(async () => {
     if (!token) return;
     try {
       setLoading(true);
-      // ⭐ ปรับ Query ให้ดึงข้อมูล Relation ให้ลึกถึงฟิลด์ที่ต้องการ (Strapi v5)
+      // Query เดิม (Strapi v5)
       const query = [
         `populate[items][populate]=product`,
         `populate[project_site][fields][0]=name`,
@@ -48,19 +56,14 @@ export default function ManageRequestsScreen() {
     }, [fetchAllRequests])
   );
 
-  // ⭐ ฟังก์ชันช่วยดึงชื่อ (แก้ปัญหา "ไม่ระบุ")
   const getDisplayName = (obj: any, type: 'user' | 'site') => {
     if (!obj) return "ไม่ระบุ";
-    if (type === 'user') {
-      return obj.username || obj.attributes?.username || "ไม่ระบุชื่อ";
-    }
-    if (type === 'site') {
-      return obj.name || obj.attributes?.name || "ไม่ระบุไซท์";
-    }
+    if (type === 'user') return obj.username || obj.attributes?.username || "ไม่ระบุชื่อ";
+    if (type === 'site') return obj.name || obj.attributes?.name || "ไม่ระบุไซท์";
     return "ไม่ระบุ";
   };
 
-  // Logic การกรองข้อมูล
+  // Logic การกรองข้อมูล (คงเดิม)
   const filteredRequests = useMemo(() => {
     return requests.filter(item => {
       const statusMatch = item.request_status === statusFilter;
@@ -83,6 +86,113 @@ export default function ManageRequestsScreen() {
     }
   };
 
+  // ---------------------------------------------------------
+  // 🖨️ ฟังก์ชัน 1: สร้าง PDF
+  // ---------------------------------------------------------
+  const handleExportPDF = async () => {
+    if (filteredRequests.length === 0) {
+      Alert.alert("ไม่มีข้อมูล", "ไม่พบรายการที่จะพิมพ์");
+      return;
+    }
+
+    // สร้าง HTML สำหรับตาราง
+    const tableRows = filteredRequests.map((item, index) => `
+      <tr>
+        <td style="text-align: center;">${index + 1}</td>
+        <td>${item.job_no || '-'}</td>
+        <td>${new Date(item.createdAt).toLocaleDateString('th-TH')}</td>
+        <td>${getDisplayName(item.request_by, 'user')}</td>
+        <td>${getDisplayName(item.project_site, 'site')}</td>
+        <td style="text-align: center;">${item.items?.length || 0}</td>
+        <td style="text-align: center;">${getStatusStyle(item.request_status).label}</td>
+      </tr>
+    `).join('');
+
+    const html = `
+      <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+          <style>
+            body { font-family: 'Helvetica', sans-serif; padding: 20px; }
+            h1 { text-align: center; color: #333; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { border: 1px solid #ddd; padding: 8px; font-size: 12px; }
+            th { background-color: #f2f2f2; text-align: left; }
+            .footer { margin-top: 30px; text-align: right; font-size: 10px; color: #777; }
+          </style>
+        </head>
+        <body>
+          <h1>📄 รายงานการเบิกสินค้า</h1>
+          <p>สถานะ: <strong>${getStatusStyle(statusFilter).label}</strong> | จำนวน: ${filteredRequests.length} รายการ</p>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 5%;">#</th>
+                <th style="width: 20%;">เลขที่ใบงาน</th>
+                <th style="width: 15%;">วันที่</th>
+                <th style="width: 20%;">ผู้เบิก</th>
+                <th style="width: 20%;">ไซท์งาน</th>
+                <th style="width: 10%;">รายการ</th>
+                <th style="width: 10%;">สถานะ</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tableRows}
+            </tbody>
+          </table>
+          <div class="footer">
+            พิมพ์เมื่อ: ${new Date().toLocaleString('th-TH')}
+          </div>
+        </body>
+      </html>
+    `;
+
+    try {
+      const { uri } = await Print.printToFileAsync({ html });
+      await shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
+    } catch (error) {
+      Alert.alert("Error", "ไม่สามารถสร้าง PDF ได้");
+      console.error(error);
+    }
+  };
+
+  // ---------------------------------------------------------
+  // 🔔 ฟังก์ชัน 2: ส่ง Line Notify
+  // ---------------------------------------------------------
+  const handleLineNotify = async (item: any) => {
+    // ถ้ายังไม่ได้ใส่ Token ให้แจ้งเตือนก่อน
+    if (LINE_NOTIFY_TOKEN === "วาง_TOKEN_ของคุณที่นี่") {
+      Alert.alert("ยังไม่ตั้งค่า Line", "กรุณาใส่ Line Notify Token ในโค้ดก่อนใช้งานครับ");
+      return;
+    }
+
+    const message = `\n📢 แจ้งเตือนสถานะใบเบิก\n` +
+      `📄 เลขที่: ${item.job_no || '-'}\n` +
+      `👤 ผู้เบิก: ${getDisplayName(item.request_by, 'user')}\n` +
+      `📍 ไซท์งาน: ${getDisplayName(item.project_site, 'site')}\n` +
+      `📦 จำนวน: ${item.items?.length || 0} รายการ\n` +
+      `📌 สถานะ: ${getStatusStyle(item.request_status).label}`;
+
+    try {
+      const response = await fetch('https://notify-api.line.me/api/notify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Bearer ${LINE_NOTIFY_TOKEN}`,
+        },
+        body: `message=${encodeURIComponent(message)}`,
+      });
+
+      if (response.ok) {
+        Alert.alert("สำเร็จ", "ส่งแจ้งเตือน Line เรียบร้อย!");
+      } else {
+        Alert.alert("ผิดพลาด", "ส่ง Line ไม่สำเร็จ");
+      }
+    } catch (error) {
+      Alert.alert("Error", "เกิดข้อผิดพลาดในการเชื่อมต่อ Line");
+    }
+  };
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -91,7 +201,11 @@ export default function ManageRequestsScreen() {
           <Ionicons name="arrow-back" size={24} color="#334155" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>จัดการใบเบิกสินค้า</Text>
-        <View style={{ width: 40 }} />
+        
+        {/* ⭐ ปุ่ม Print PDF เพิ่มเข้ามาใหม่ตรงนี้ */}
+        <TouchableOpacity onPress={handleExportPDF} style={styles.printBtn}>
+          <Ionicons name="print-outline" size={24} color="#00796B" />
+        </TouchableOpacity>
       </View>
 
       {/* Search Bar */}
@@ -137,8 +251,23 @@ export default function ManageRequestsScreen() {
                   <Text style={styles.jobNo}>{item.job_no || 'No Job No.'}</Text>
                   <Text style={styles.requester}>👤 ผู้เบิก: {getDisplayName(item.request_by, 'user')}</Text>
                 </View>
-                <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
-                  <Text style={[styles.statusText, { color: statusStyle.text }]}>{statusStyle.label}</Text>
+                
+                {/* ปุ่ม Action ขวาบนของการ์ด */}
+                <View style={{flexDirection: 'row', gap: 8}}>
+                  {/* ⭐ ปุ่มแจ้งเตือน Line */}
+                  <TouchableOpacity 
+                    style={styles.iconBtn} 
+                    onPress={(e) => {
+                      e.stopPropagation(); // ป้องกันไม่ให้กดทะลุไปหน้า detail
+                      handleLineNotify(item);
+                    }}
+                  >
+                     <Ionicons name="notifications-outline" size={20} color="#f59e0b" />
+                  </TouchableOpacity>
+
+                  <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
+                    <Text style={[styles.statusText, { color: statusStyle.text }]}>{statusStyle.label}</Text>
+                  </View>
                 </View>
               </View>
 
@@ -176,6 +305,7 @@ const styles = StyleSheet.create({
     paddingTop: 60, paddingBottom: 15, paddingHorizontal: 15, backgroundColor: 'white' 
   },
   backBtn: { padding: 5 },
+  printBtn: { padding: 5 }, // Style สำหรับปุ่ม Print
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1e293b' },
   searchSection: { padding: 15, backgroundColor: 'white' },
   searchBar: { 
@@ -198,5 +328,6 @@ const styles = StyleSheet.create({
   infoText: { fontSize: 14, color: '#475569' },
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' },
   dateText: { fontSize: 12, color: '#94a3b8' },
-  empty: { textAlign: 'center', marginTop: 50, color: '#94a3b8' }
+  empty: { textAlign: 'center', marginTop: 50, color: '#94a3b8' },
+  iconBtn: { padding: 4, marginRight: 8 } // Style สำหรับปุ่ม Line
 });

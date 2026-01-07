@@ -9,10 +9,12 @@ interface TechnicianProps {
 
 export default function TechnicianView({ token }: TechnicianProps) {
   const router = useRouter();
-
+  
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.sectionTitle}>เมนูสำหรับช่าง 🛠️</Text>
+      
+      {/* --- แถวที่ 1: เมนูเดิม --- */}
       <View style={styles.menuGrid}>
         <TouchableOpacity style={styles.menuCard} onPress={() => router.push('/product/create_request')}>
           <Ionicons name="add-circle" size={32} color="#6366f1" />
@@ -21,13 +23,29 @@ export default function TechnicianView({ token }: TechnicianProps) {
 
         <TouchableOpacity 
           style={styles.menuCard} 
-          // ⭐ แก้ไขจาก my_request เป็น my_requests (เติม s)
           onPress={() => router.push('/product/my_requests' as any)}
         >
           <Ionicons name="time" size={32} color="#0ea5e9" />
           <Text style={styles.menuTitle}>ประวัติของฉัน</Text>
         </TouchableOpacity>
       </View>
+
+      {/* --- แถวที่ 2: เมนูใหม่ (คืนของ) --- */}
+      {/* เพิ่ม marginTop 15 ให้ห่างจากแถวบนนิดหน่อย */}
+      <View style={[styles.menuGrid, { marginTop: 15 }]}>
+        <TouchableOpacity 
+          style={styles.menuCard} 
+          onPress={() => router.push('/product/create_return' as any)}
+        >
+          {/* ใช้ไอคอนสีส้ม ให้ดูแตกต่างว่าเป็นของเข้า */}
+          <Ionicons name="return-down-back" size={32} color="#f59e0b" />
+          <Text style={styles.menuTitle}>คืนของเข้า Store</Text>
+        </TouchableOpacity>
+
+        {/* ⭐ กล่องเปล่า (Dummy Box) เพื่อรักษาทรงให้ปุ่มซ้ายขนาดเท่าเดิม */}
+        <View style={[styles.menuCard, { backgroundColor: 'transparent', elevation: 0 }]} />
+      </View>
+
     </ScrollView>
   );
 }

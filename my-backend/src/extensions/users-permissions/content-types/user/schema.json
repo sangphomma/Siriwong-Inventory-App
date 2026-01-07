@@ -82,6 +82,12 @@
       "relation": "oneToMany",
       "target": "api::withdrawal-request.withdrawal-request",
       "mappedBy": "request_by"
+    },
+    "return_requests": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::return-request.return-request",
+      "mappedBy": "return_by"
     }
   }
 }

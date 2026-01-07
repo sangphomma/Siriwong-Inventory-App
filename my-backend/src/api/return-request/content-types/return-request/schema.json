@@ -1,0 +1,47 @@
+{
+  "kind": "collectionType",
+  "collectionName": "return_requests",
+  "info": {
+    "singularName": "return-request",
+    "pluralName": "return-requests",
+    "displayName": "ReturnRequest"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "job_no": {
+      "type": "string"
+    },
+    "return_status": {
+      "type": "enumeration",
+      "default": "pending",
+      "enum": [
+        "pending",
+        "approved",
+        "rejected"
+      ]
+    },
+    "note": {
+      "type": "text"
+    },
+    "items": {
+      "type": "component",
+      "component": "inventory.request-item",
+      "repeatable": true
+    },
+    "return_by": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "inversedBy": "return_requests"
+    },
+    "project_site": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project-site.project-site",
+      "inversedBy": "return_requests"
+    }
+  }
+}

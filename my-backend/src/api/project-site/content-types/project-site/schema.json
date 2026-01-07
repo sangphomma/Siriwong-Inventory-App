@@ -30,6 +30,12 @@
         "active",
         "closed"
       ]
+    },
+    "return_requests": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::return-request.return-request",
+      "mappedBy": "project_site"
     }
   }
 }
