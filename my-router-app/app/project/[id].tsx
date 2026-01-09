@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'; 
+import React, { useState, useCallback, useMemo } from 'react'; 
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack, useFocusEffect } from 'expo-router'; 
 import { Ionicons } from '@expo/vector-icons';
@@ -15,7 +15,8 @@ export default function ProjectDetailScreen() {
 
   const fetchProjectDetails = async () => {
     try {
-      const query = `populate[jobs][populate]=*`; 
+      // ดึง Jobs และ JobTasks มาเพื่อคำนวณ Progress ที่แม่นยำที่สุด
+      const query = `populate[jobs][populate]=job_tasks`; 
       const response = await fetch(`${API_URL}/project-sites/${id}?${query}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -29,6 +30,22 @@ export default function ProjectDetailScreen() {
   };
 
   useFocusEffect(useCallback(() => { if (id && token) fetchProjectDetails(); }, [id, token]));
+
+  // --- 🟢 ส่วนที่แก้ไข: คำนวณ Overall Progress ของโครงการ ---
+  const calculatedOverallProgress = useMemo(() => {
+    if (!project?.jobs || project.jobs.length === 0) return 0;
+
+    const totalJobs = project.jobs.length;
+    const sumProgress = project.jobs.reduce((acc: number, job: any) => {
+      // คำนวณ progress ของแต่ละ job จาก job_tasks
+      if (!job.job_tasks || job.job_tasks.length === 0) return acc;
+      const completedTasks = job.job_tasks.filter((t: any) => t.job_status === 'Completed').length;
+      const jobProgress = (completedTasks / job.job_tasks.length) * 100;
+      return acc + jobProgress;
+    }, 0);
+
+    return Math.round(sumProgress / totalJobs);
+  }, [project?.jobs]);
 
   const handleDeleteProject = async () => {
     if (project?.jobs && project.jobs.length > 0) {
@@ -57,7 +74,7 @@ export default function ProjectDetailScreen() {
     ]);
   };
 
-  if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#6366f1" /></View>;
+  if (loading && !project) return <View style={styles.center}><ActivityIndicator size="large" color="#6366f1" /></View>;
   if (!project) return <View style={styles.center}><Text>ไม่พบข้อมูลโครงการ</Text></View>;
 
   return (
@@ -84,10 +101,11 @@ export default function ProjectDetailScreen() {
         </View>
 
         <View style={styles.statCard}>
-           <Text style={styles.sectionHeader}>ความคืบหน้าโครงการ</Text>
-           <Text style={styles.bigPercent}>{project.overall_progress || 0}%</Text>
+           <Text style={styles.sectionHeader}>ความคืบหน้าโครงการรวม</Text>
+           {/* เปลี่ยนมาใช้ค่าที่คำนวณได้ */}
+           <Text style={styles.bigPercent}>{calculatedOverallProgress}%</Text>
            <View style={styles.progressBarBg}>
-              <View style={[styles.progressBarFill, { width: `${project.overall_progress || 0}%` }]} />
+              <View style={[styles.progressBarFill, { width: `${calculatedOverallProgress}%` }]} />
            </View>
         </View>
 
@@ -102,19 +120,29 @@ export default function ProjectDetailScreen() {
             </TouchableOpacity>
         </View>
         
-        {project.jobs?.map((job: any) => (
-          <TouchableOpacity 
-            key={job.id} 
-            style={styles.jobCard}
-            onPress={() => router.push(`/project/job/${job.documentId}`)}
-          >
-            <View style={styles.jobInfo}>
-              <Text style={styles.jobName}>{job.name}</Text>
-              <Text style={styles.jobProgressText}>{job.progress || 0}% เสร็จสิ้น</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#cbd5e1" />
-          </TouchableOpacity>
-        ))}
+        {project.jobs?.map((job: any) => {
+          // คำนวณ progress ราย job เพื่อแสดงในลิสต์
+          const completed = job.job_tasks?.filter((t: any) => t.job_status === 'Completed').length || 0;
+          const total = job.job_tasks?.length || 0;
+          const jobPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+          return (
+            <TouchableOpacity 
+              key={job.id} 
+              style={styles.jobCard}
+              onPress={() => router.push(`/project/job/${job.documentId}`)}
+            >
+              <View style={styles.jobInfo}>
+                <Text style={styles.jobName}>{job.name}</Text>
+                <Text style={styles.jobProgressText}>{jobPercent}% เสร็จสิ้น</Text>
+                <View style={[styles.miniProgressBarBg, {marginTop: 8}]}>
+                   <View style={[styles.miniProgressBarFill, { width: `${jobPercent}%` }]} />
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#cbd5e1" />
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
     </View>
   );
@@ -141,5 +169,7 @@ const styles = StyleSheet.create({
   jobCard: { flexDirection: 'row', backgroundColor: 'white', padding: 16, borderRadius: 12, marginBottom: 12, alignItems: 'center', elevation: 1 },
   jobInfo: { flex: 1 },
   jobName: { fontSize: 16, fontWeight: '600', color: '#1e293b' },
-  jobProgressText: { fontSize: 12, color: '#94a3b8', marginTop: 4 }
+  jobProgressText: { fontSize: 12, color: '#94a3b8', marginTop: 4 },
+  miniProgressBarBg: { height: 4, backgroundColor: '#f1f5f9', borderRadius: 2, overflow: 'hidden', width: '60%' },
+  miniProgressBarFill: { height: '100%', backgroundColor: '#6366f1', borderRadius: 2 },
 });
