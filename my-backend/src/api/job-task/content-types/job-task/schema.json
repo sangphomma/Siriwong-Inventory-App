@@ -1,0 +1,46 @@
+{
+  "kind": "collectionType",
+  "collectionName": "job_tasks",
+  "info": {
+    "singularName": "job-task",
+    "pluralName": "job-tasks",
+    "displayName": "JobTask"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "task_name": {
+      "type": "string"
+    },
+    "quantity": {
+      "type": "decimal"
+    },
+    "unit": {
+      "type": "string"
+    },
+    "job_status": {
+      "type": "enumeration",
+      "enum": [
+        "Pending",
+        "On Process",
+        "Completed"
+      ]
+    },
+    "job": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::job.job",
+      "inversedBy": "job_tasks"
+    },
+    "evidence_image": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images",
+        "files"
+      ]
+    }
+  }
+}

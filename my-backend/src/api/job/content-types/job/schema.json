@@ -1,0 +1,33 @@
+{
+  "kind": "collectionType",
+  "collectionName": "jobs",
+  "info": {
+    "singularName": "job",
+    "pluralName": "jobs",
+    "displayName": "Job"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string"
+    },
+    "progress": {
+      "type": "integer"
+    },
+    "project_site": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project-site.project-site",
+      "inversedBy": "jobs"
+    },
+    "job_tasks": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::job-task.job-task",
+      "mappedBy": "job"
+    }
+  }
+}

@@ -28,13 +28,29 @@
       "default": "active",
       "enum": [
         "active",
-        "closed"
+        "closed",
+        "pending"
       ]
     },
     "return_requests": {
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::return-request.return-request",
+      "mappedBy": "project_site"
+    },
+    "coordinates": {
+      "type": "string"
+    },
+    "distance_from_branch": {
+      "type": "string"
+    },
+    "overall_progress": {
+      "type": "integer"
+    },
+    "jobs": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::job.job",
       "mappedBy": "project_site"
     }
   }

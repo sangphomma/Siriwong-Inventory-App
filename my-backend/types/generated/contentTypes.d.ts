@@ -460,6 +460,72 @@ export interface ApiCategoryCategory extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiJobTaskJobTask extends Struct.CollectionTypeSchema {
+  collectionName: 'job_tasks';
+  info: {
+    displayName: 'JobTask';
+    pluralName: 'job-tasks';
+    singularName: 'job-task';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    evidence_image: Schema.Attribute.Media<'images' | 'files'>;
+    job: Schema.Attribute.Relation<'manyToOne', 'api::job.job'>;
+    job_status: Schema.Attribute.Enumeration<
+      ['Pending', 'On Process', 'Completed']
+    >;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::job-task.job-task'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    quantity: Schema.Attribute.Decimal;
+    task_name: Schema.Attribute.String;
+    unit: Schema.Attribute.String;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiJobJob extends Struct.CollectionTypeSchema {
+  collectionName: 'jobs';
+  info: {
+    displayName: 'Job';
+    pluralName: 'jobs';
+    singularName: 'job';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    job_tasks: Schema.Attribute.Relation<'oneToMany', 'api::job-task.job-task'>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<'oneToMany', 'api::job.job'> &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String;
+    progress: Schema.Attribute.Integer;
+    project_site: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::project-site.project-site'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiLocationLocation extends Struct.CollectionTypeSchema {
   collectionName: 'locations';
   info: {
@@ -580,9 +646,12 @@ export interface ApiProjectSiteProjectSite extends Struct.CollectionTypeSchema {
     draftAndPublish: true;
   };
   attributes: {
+    coordinates: Schema.Attribute.String;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    distance_from_branch: Schema.Attribute.String;
+    jobs: Schema.Attribute.Relation<'oneToMany', 'api::job.job'>;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
@@ -591,7 +660,10 @@ export interface ApiProjectSiteProjectSite extends Struct.CollectionTypeSchema {
       Schema.Attribute.Private;
     location: Schema.Attribute.Text;
     name: Schema.Attribute.String;
-    project_status: Schema.Attribute.Enumeration<['active', 'closed']> &
+    overall_progress: Schema.Attribute.Integer;
+    project_status: Schema.Attribute.Enumeration<
+      ['active', 'closed', 'pending']
+    > &
       Schema.Attribute.DefaultTo<'active'>;
     publishedAt: Schema.Attribute.DateTime;
     return_requests: Schema.Attribute.Relation<
@@ -1307,6 +1379,8 @@ declare module '@strapi/strapi' {
       'admin::transfer-token-permission': AdminTransferTokenPermission;
       'admin::user': AdminUser;
       'api::category.category': ApiCategoryCategory;
+      'api::job-task.job-task': ApiJobTaskJobTask;
+      'api::job.job': ApiJobJob;
       'api::location.location': ApiLocationLocation;
       'api::petty-cash.petty-cash': ApiPettyCashPettyCash;
       'api::product.product': ApiProductProduct;
