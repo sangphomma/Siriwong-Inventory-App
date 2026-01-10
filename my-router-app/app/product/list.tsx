@@ -118,10 +118,15 @@ export default function ProductListScreen() {
     );
   };
 
+
+
   const renderItem = ({ item }: { item: any }) => {
     const imageUrl = item.image?.url 
       ? (item.image.url.startsWith('http') ? item.image.url : `${BASE_URL}${item.image.url}`)
       : null;
+
+    // 📍 ส่วนที่เพิ่ม: เตรียมข้อมูลจุดจัดเก็บมาแสดง
+    const stockLocations = item.stock_locations || [];
 
     return (
       <TouchableOpacity style={styles.card} onPress={() => handlePressItem(item)}>
@@ -136,17 +141,27 @@ export default function ProductListScreen() {
         <View style={styles.info}>
           <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
           <Text style={styles.category}>{item.category?.name || 'ทั่วไป'}</Text>
+          
+          {/* 📍 เพิ่มการแสดงจุดจัดเก็บตัวอย่างในการ์ด */}
+          <View style={styles.locationList}>
+            {stockLocations.length > 0 ? (
+              stockLocations.map((loc: any, idx: number) => (
+                <Text key={idx} style={styles.locationSmallText}>
+                   📍 {loc.location?.name}: {loc.on_hand_stock}
+                </Text>
+              ))
+            ) : (
+              <Text style={styles.noLocationText}>⚠️ ยังไม่ได้ลงทะเบียนจุดเก็บ</Text>
+            )}
+          </View>
+
           <Text style={[styles.stock, item.stock <= 5 ? {color: '#dc2626'} : {color: '#16a34a'}]}>
-             คงเหลือ: {item.stock}
+             คงเหลือรวม: {item.stock}
           </Text>
         </View>
 
         <View style={styles.actionIcon}>
-            { (user?.position === 'owner' || user?.position === 'store_keeper') ? (
-                <Ionicons name="ellipsis-vertical" size={20} color="#999" />
-            ) : (
-                <Ionicons name="eye-outline" size={20} color="#999" />
-            )}
+            <Ionicons name="chevron-forward" size={20} color="#999" />
         </View>
       </TouchableOpacity>
     );
@@ -248,6 +263,11 @@ const styles = StyleSheet.create({
   catBadgeActive: { backgroundColor: '#00796B' },
   catText: { color: '#666', fontSize: 13 },
   catTextActive: { color: 'white', fontWeight: 'bold' },
+
+
+  locationList: { marginTop: 5, marginBottom: 5 },
+  locationSmallText: { fontSize: 11, color: '#64748b', marginBottom: 2 },
+  noLocationText: { fontSize: 11, color: '#94a3b8', fontStyle: 'italic' },
 
   // Card Styles
   card: { flexDirection: 'row', backgroundColor: 'white', borderRadius: 12, padding: 10, marginBottom: 10, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 2, elevation: 2 },

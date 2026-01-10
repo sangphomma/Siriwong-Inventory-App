@@ -45,6 +45,12 @@
       "relation": "manyToOne",
       "target": "api::category.category",
       "inversedBy": "products"
+    },
+    "stock_locations": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::stock-location.stock-location",
+      "mappedBy": "product"
     }
   }
 }

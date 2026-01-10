@@ -13,7 +13,6 @@ export default function StoreKeeperView({ token }: StoreKeeperProps) {
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // ฟังก์ชันดึงรายการใบเบิกที่ค้างอนุมัติ (Pending)
   const fetchPendingRequests = useCallback(async () => {
     if (!token) return;
     try {
@@ -62,9 +61,8 @@ export default function StoreKeeperView({ token }: StoreKeeperProps) {
     <View style={styles.menuSection}>
       <Text style={styles.sectionTitle}>เมนูจัดการคลัง 🏗️</Text>
       
-      {/* ปรับ Layout เมนูใหม่ ให้อ่านง่ายขึ้น */}
       <View style={styles.menuGrid}>
-        {/* แถว 1: เมนูจัดการสินค้า */}
+        {/* แถว 1 */}
         <View style={styles.row}>
           <TouchableOpacity style={[styles.menuBtn, { backgroundColor: '#6366f1' }]} onPress={() => router.push('/product/withdraw')}>
             <Ionicons name="cart" size={24} color="white" />
@@ -80,24 +78,45 @@ export default function StoreKeeperView({ token }: StoreKeeperProps) {
           </TouchableOpacity>
         </View>
 
-        {/* แถว 2: เมนูจัดการเอกสาร (เบิก/คืน) */}
+        {/* แถว 2 */}
         <View style={[styles.row, { marginTop: 10 }]}>
           <TouchableOpacity 
-            style={[styles.menuBtn, { backgroundColor: '#10b981', flex: 1, marginRight: 5 }]} 
+            style={[styles.menuBtn, { backgroundColor: '#10b981' }]} 
             onPress={() => router.push('/product/manage_requests' as any)}
           >
             <Ionicons name="clipboard" size={24} color="white" />
             <Text style={styles.menuBtnText}>จัดการใบเบิก (Out)</Text>
           </TouchableOpacity>
 
-          {/* ⭐ ปุ่มใหม่: รับคืนของ */}
           <TouchableOpacity 
-            style={[styles.menuBtn, { backgroundColor: '#ef4444', flex: 1, marginLeft: 5 }]} 
+            style={[styles.menuBtn, { backgroundColor: '#ef4444' }]} 
             onPress={() => router.push('/product/manage_returns' as any)}
           >
             <Ionicons name="return-down-back" size={24} color="white" />
             <Text style={styles.menuBtnText}>รับของคืน (In)</Text>
           </TouchableOpacity>
+        </View>
+
+        {/* แถว 3: Location & Transfer */}
+        <View style={[styles.row, { marginTop: 10 }]}>
+          <TouchableOpacity 
+            style={[styles.menuBtn, { backgroundColor: '#8b5cf6' }]} 
+            onPress={() => router.push('/product/transfer' as any)}
+          >
+            <Ionicons name="swap-horizontal" size={24} color="white" />
+            <Text style={styles.menuBtnText}>โอนย้ายจุดเก็บ</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.menuBtn, { backgroundColor: '#06b6d4' }]} 
+            onPress={() => router.push('/product/manage_stock_location')}
+          >
+            <Ionicons name="location" size={24} color="white" />
+            <Text style={styles.menuBtnText}>ลงทะเบียนจุดเก็บ</Text>
+          </TouchableOpacity>
+          
+          {/* เว้นว่างเพื่อให้สมดุลกับแถวบน */}
+          <View style={{ flex: 1 }} />
         </View>
       </View>
 
@@ -152,9 +171,9 @@ const styles = StyleSheet.create({
   menuSection: { marginBottom: 10 },
   sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#1e293b', marginBottom: 12 },
   menuGrid: { gap: 0 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 }, // จัดแถว
+  row: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
   menuBtn: { flex: 1, paddingVertical: 15, borderRadius: 12, alignItems: 'center', justifyContent: 'center', elevation: 1 },
-  menuBtnText: { color: 'white', fontSize: 12, fontWeight: 'bold', marginTop: 5 }, // ปรับ Font ให้อ่านง่ายขึ้น
+  menuBtnText: { color: 'white', fontSize: 12, fontWeight: 'bold', marginTop: 5 },
   
   card: { backgroundColor: 'white', borderRadius: 12, padding: 15, marginBottom: 12, elevation: 2, shadowColor: '#000', shadowOpacity: 0.05 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },

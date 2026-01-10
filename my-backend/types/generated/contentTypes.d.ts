@@ -550,6 +550,10 @@ export interface ApiLocationLocation extends Struct.CollectionTypeSchema {
     name: Schema.Attribute.String;
     products: Schema.Attribute.Relation<'oneToMany', 'api::product.product'>;
     publishedAt: Schema.Attribute.DateTime;
+    stock_locations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::stock-location.stock-location'
+    >;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -624,6 +628,10 @@ export interface ApiProductProduct extends Struct.CollectionTypeSchema {
     name: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
     stock: Schema.Attribute.Integer;
+    stock_locations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::stock-location.stock-location'
+    >;
     unit: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
@@ -717,6 +725,37 @@ export interface ApiReturnRequestReturnRequest
       ['pending', 'approved', 'rejected']
     > &
       Schema.Attribute.DefaultTo<'pending'>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiStockLocationStockLocation
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'stock_locations';
+  info: {
+    displayName: 'Stock_Location';
+    pluralName: 'stock-locations';
+    singularName: 'stock-location';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::stock-location.stock-location'
+    > &
+      Schema.Attribute.Private;
+    location: Schema.Attribute.Relation<'manyToOne', 'api::location.location'>;
+    on_hand_stock: Schema.Attribute.Integer;
+    product: Schema.Attribute.Relation<'manyToOne', 'api::product.product'>;
+    publishedAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -1386,6 +1425,7 @@ declare module '@strapi/strapi' {
       'api::product.product': ApiProductProduct;
       'api::project-site.project-site': ApiProjectSiteProjectSite;
       'api::return-request.return-request': ApiReturnRequestReturnRequest;
+      'api::stock-location.stock-location': ApiStockLocationStockLocation;
       'api::tag.tag': ApiTagTag;
       'api::withdrawal-item.withdrawal-item': ApiWithdrawalItemWithdrawalItem;
       'api::withdrawal-order.withdrawal-order': ApiWithdrawalOrderWithdrawalOrder;

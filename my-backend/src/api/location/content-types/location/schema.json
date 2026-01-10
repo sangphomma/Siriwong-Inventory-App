@@ -29,6 +29,12 @@
       "relation": "oneToMany",
       "target": "api::product.product",
       "mappedBy": "location"
+    },
+    "stock_locations": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::stock-location.stock-location",
+      "mappedBy": "location"
     }
   }
 }
