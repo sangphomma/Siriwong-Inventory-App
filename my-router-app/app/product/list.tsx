@@ -10,7 +10,7 @@ import { useAuth } from '../../contexts/AuthContext';
 
 export default function ProductListScreen() {
   const router = useRouter();
-  const { user, token } = useAuth(); // ดึง Token มาใช้
+  const { user, token } = useAuth();
 
   // --- State ข้อมูล ---
   const [products, setProducts] = useState<any[]>([]);
@@ -41,10 +41,10 @@ export default function ProductListScreen() {
       const jsonCats = await resCats.json();
       setCategories(jsonCats.data || []);
 
-      // 2. ดึงสินค้า (Query แบบเจาะจง Field เพื่อป้องกัน Infinite Loop)
+      // 2. ดึงสินค้า
       const queryString = [
         'populate[image][fields][0]=url',               
-        'populate[category][fields][0]=name',           // ✅ หัวใจสำคัญ: เอาแค่ชื่อหมวดหมู่ ตัดวงจร Loop
+        'populate[category][fields][0]=name',           
         'populate[stock_locations][populate][location][fields][0]=name', 
         'populate[stock_locations][fields][0]=on_hand_stock',            
         'pagination[pageSize]=1000'
@@ -66,7 +66,7 @@ export default function ProductListScreen() {
     }
   };
 
-  // 🛠️ ฟังก์ชันแกะเปลือกหมวดหมู่ (Universal Peeler)
+  // 🛠️ ฟังก์ชันแกะเปลือกหมวดหมู่
   const getCategoryName = (item: any) => {
       if (!item.category) return 'ทั่วไป';
 
@@ -77,7 +77,6 @@ export default function ProductListScreen() {
       if (catData.attributes?.name) return catData.attributes.name;
       if (catData.name) return catData.name;
 
-      // Fallback: Lookup จาก ID
       const targetId = catData.documentId || catData.id || catData; 
       const found = categories.find(c => {
           const cId = c.documentId || c.id; 
@@ -85,14 +84,20 @@ export default function ProductListScreen() {
       });
 
       if (found) return found.attributes?.name || found.name || 'ทั่วไป';
-
       return 'ทั่วไป';
+  };
+
+  // 🛠️ ฟังก์ชันช่วยคำนวณสต็อกจริงจาก Location
+  const calculateRealStock = (item: any) => {
+    const locs = item.stock_locations || [];
+    return locs.reduce((sum: number, loc: any) => sum + (parseInt(loc.on_hand_stock) || 0), 0);
   };
 
   // Logic กรองและเรียง
   const processedProducts = useMemo(() => {
     let result = [...products];
 
+    // 1. กรองหมวดหมู่
     if (selectedCategory !== 'all') {
       result = result.filter(p => {
           const catData = p.category?.data || p.category;
@@ -101,17 +106,24 @@ export default function ProductListScreen() {
       });
     }
 
+    // 2. กรองชื่อ
     if (searchQuery) {
       result = result.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
     }
 
+    // 3. กรองของใกล้หมด (ใช้ Real Stock)
     if (showLowStockOnly) {
-      result = result.filter(p => p.stock <= 5);
+      result = result.filter(p => calculateRealStock(p) <= 5);
     }
 
-    if (sortBy === 'name') result.sort((a, b) => a.name.localeCompare(b.name));
-    else if (sortBy === 'stockAsc') result.sort((a, b) => a.stock - b.stock);
-    else if (sortBy === 'stockDesc') result.sort((a, b) => b.stock - a.stock);
+    // 4. เรียงลำดับ
+    if (sortBy === 'name') {
+        result.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sortBy === 'stockAsc') {
+        result.sort((a, b) => calculateRealStock(a) - calculateRealStock(b));
+    } else if (sortBy === 'stockDesc') {
+        result.sort((a, b) => calculateRealStock(b) - calculateRealStock(a));
+    }
 
     return result;
   }, [products, selectedCategory, searchQuery, showLowStockOnly, sortBy, categories]);
@@ -125,16 +137,33 @@ export default function ProductListScreen() {
     ]);
   };
 
-  const handlePressItem = (item: any) => {
+const handlePressItem = (item: any) => {
+    const realStock = calculateRealStock(item);
+    
+    // กรณีเป็น User ทั่วไป (ดูได้อย่างเดียว)
     if (user?.position !== 'owner' && user?.position !== 'store_keeper') {
        const catName = getCategoryName(item);
-       Alert.alert("📦 ข้อมูล", `${item.name}\nหมวดหมู่: ${catName}`, [{ text: "รับทราบ" }]);
+       Alert.alert("📦 ข้อมูลสินค้า", `${item.name}\nคงเหลือ: ${realStock}\nหมวดหมู่: ${catName}`, [{ text: "รับทราบ" }]);
        return;
     }
-    Alert.alert("จัดการ", `"${item.name}"`, [
-        { text: "ยกเลิก", style: "cancel" },
-        { text: "✏️ แก้ไข", onPress: () => router.push(`/product/edit/${item.documentId || item.id}` as any) }
-    ]);
+
+    // กรณีเป็น Store Keeper / Owner (มีเมนูจัดการ)
+    Alert.alert(
+        "จัดการสินค้า", 
+        `"${item.name}"\nคงเหลือ: ${realStock}`, 
+        [
+            { text: "ยกเลิก", style: "cancel" },
+            // 👇 เพิ่มปุ่มนี้ครับ
+            { 
+                text: "📜 ดูประวัติ (Stock Card)", 
+                onPress: () => router.push(`/product/stock_card/${item.documentId || item.id}` as any) 
+            },
+            { 
+                text: "✏️ แก้ไขข้อมูล", 
+                onPress: () => router.push(`/product/edit/${item.documentId || item.id}` as any) 
+            }
+        ]
+    );
   };
 
   const renderItem = ({ item }: { item: any }) => {
@@ -143,6 +172,7 @@ export default function ProductListScreen() {
       : null;
     const stockLocations = item.stock_locations || [];
     const categoryName = getCategoryName(item);
+    const realStock = calculateRealStock(item); // 🔥 คำนวณสต็อกจริงตรงนี้
     
     return (
       <TouchableOpacity style={styles.card} onPress={() => handlePressItem(item)}>
@@ -167,8 +197,10 @@ export default function ProductListScreen() {
               <Text style={styles.noLocationText}>⚠️ ยังไม่ได้ลงทะเบียนจุดเก็บ</Text>
             )}
           </View>
-          <Text style={[styles.stock, item.stock <= 5 ? {color: '#dc2626'} : {color: '#16a34a'}]}>
-             คงเหลือ: {item.stock}
+          
+          {/* แสดงผลสต็อกที่คำนวณจริง */}
+          <Text style={[styles.stock, realStock <= 5 ? {color: '#dc2626'} : {color: '#16a34a'}]}>
+             คงเหลือ: {realStock}
           </Text>
         </View>
         <View style={styles.actionIcon}><Ionicons name="chevron-forward" size={20} color="#999" /></View>
@@ -212,7 +244,7 @@ export default function ProductListScreen() {
       ) : (
         <FlatList
           data={processedProducts}
-          extraData={categories} 
+          extraData={[categories, products]} // Trigger re-render เมื่อ products เปลี่ยน
           keyExtractor={(item: any) => item.documentId || item.id.toString()}
           renderItem={renderItem}
           contentContainerStyle={{ padding: 15 }}

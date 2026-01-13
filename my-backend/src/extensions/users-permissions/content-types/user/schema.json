@@ -88,6 +88,12 @@
       "relation": "oneToMany",
       "target": "api::return-request.return-request",
       "mappedBy": "return_by"
+    },
+    "transactions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::transaction.transaction",
+      "mappedBy": "action_by"
     }
   }
 }

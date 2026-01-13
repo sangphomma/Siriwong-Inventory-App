@@ -51,6 +51,12 @@
       "relation": "oneToMany",
       "target": "api::stock-location.stock-location",
       "mappedBy": "product"
+    },
+    "transactions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::transaction.transaction",
+      "mappedBy": "product"
     }
   }
 }

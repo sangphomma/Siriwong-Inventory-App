@@ -554,6 +554,10 @@ export interface ApiLocationLocation extends Struct.CollectionTypeSchema {
       'oneToMany',
       'api::stock-location.stock-location'
     >;
+    transactions: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::transaction.transaction'
+    >;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -631,6 +635,10 @@ export interface ApiProductProduct extends Struct.CollectionTypeSchema {
     stock_locations: Schema.Attribute.Relation<
       'oneToMany',
       'api::stock-location.stock-location'
+    >;
+    transactions: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::transaction.transaction'
     >;
     unit: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;
@@ -791,6 +799,43 @@ export interface ApiTagTag extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiTransactionTransaction extends Struct.CollectionTypeSchema {
+  collectionName: 'transactions';
+  info: {
+    displayName: 'Transaction';
+    pluralName: 'transactions';
+    singularName: 'transaction';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    action_by: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    amount: Schema.Attribute.Integer;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    doc_no: Schema.Attribute.String;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::transaction.transaction'
+    > &
+      Schema.Attribute.Private;
+    location: Schema.Attribute.Relation<'manyToOne', 'api::location.location'>;
+    product: Schema.Attribute.Relation<'manyToOne', 'api::product.product'>;
+    publishedAt: Schema.Attribute.DateTime;
+    remark: Schema.Attribute.Text;
+    type: Schema.Attribute.Enumeration<['in', 'out', 'adjust']>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiWithdrawalItemWithdrawalItem
   extends Struct.CollectionTypeSchema {
   collectionName: 'withdrawal_items';
@@ -813,6 +858,7 @@ export interface ApiWithdrawalItemWithdrawalItem
       'api::withdrawal-item.withdrawal-item'
     > &
       Schema.Attribute.Private;
+    location_snapshot: Schema.Attribute.String;
     product: Schema.Attribute.Relation<'manyToOne', 'api::product.product'>;
     publishedAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
@@ -844,6 +890,7 @@ export interface ApiWithdrawalOrderWithdrawalOrder
     > &
       Schema.Attribute.Private;
     publishedAt: Schema.Attribute.DateTime;
+    type: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -1390,6 +1437,10 @@ export interface PluginUsersPermissionsUser
       'manyToOne',
       'plugin::users-permissions.role'
     >;
+    transactions: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::transaction.transaction'
+    >;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -1427,6 +1478,7 @@ declare module '@strapi/strapi' {
       'api::return-request.return-request': ApiReturnRequestReturnRequest;
       'api::stock-location.stock-location': ApiStockLocationStockLocation;
       'api::tag.tag': ApiTagTag;
+      'api::transaction.transaction': ApiTransactionTransaction;
       'api::withdrawal-item.withdrawal-item': ApiWithdrawalItemWithdrawalItem;
       'api::withdrawal-order.withdrawal-order': ApiWithdrawalOrderWithdrawalOrder;
       'api::withdrawal-request.withdrawal-request': ApiWithdrawalRequestWithdrawalRequest;

@@ -1,33 +1,39 @@
 import React, { useState, useCallback } from 'react';
 import { 
-  View, Text, StyleSheet, FlatList, ActivityIndicator, 
-  RefreshControl, TouchableOpacity 
+  View, Text, StyleSheet, FlatList, TouchableOpacity, 
+  RefreshControl, ActivityIndicator, SafeAreaView 
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../contexts/AuthContext';
 import { API_URL } from '../../constants/Config';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function ManageReturnsScreen() {
   const router = useRouter();
   const { token } = useAuth();
-  const [requests, setRequests] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [returns, setReturns] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const fetchReturns = useCallback(async () => {
     if (!token) return;
     try {
       setLoading(true);
-      // Populate ข้อมูลที่จำเป็น: ใครคืน? ไซท์ไหน?
-      const query = `populate[return_by][fields][0]=username&populate[project_site][fields][0]=name&sort=createdAt:desc`;
+      // ดึงรายการที่ status = pending
+      const query = [
+        `filters[return_status][$eq]=pending`,
+        `populate[items][populate]=product`, 
+        `populate[return_by][fields][0]=username`,
+        `populate[project_site][fields][0]=name`,
+        `sort=createdAt:desc`
+      ].join('&');
       
-      const response = await fetch(`${API_URL}/return-requests?${query}`, {
+      const res = await fetch(`${API_URL}/return-requests?${query}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      const json = await response.json();
-      setRequests(json.data || []);
+      const json = await res.json();
+      setReturns(json.data || []);
     } catch (error) {
-      console.error(error);
+      console.error("Fetch Error:", error);
     } finally {
       setLoading(false);
     }
@@ -39,87 +45,62 @@ export default function ManageReturnsScreen() {
     }, [fetchReturns])
   );
 
-  const getStatusColor = (status: string) => {
-    switch(status) {
-      case 'approved': return '#166534'; // เขียว
-      case 'rejected': return '#991b1b'; // แดง
-      default: return '#c2410c'; // ส้ม (pending)
-    }
-  };
-
-  const getStatusBg = (status: string) => {
-    switch(status) {
-      case 'approved': return '#f0fdf4';
-      case 'rejected': return '#fef2f2';
-      default: return '#fff7ed';
-    }
-  };
-
-  // Helper สำหรับดึงค่า (ป้องกัน Error เหมือนเดิม)
-  const getValue = (item: any, key: string) => item[key] !== undefined ? item[key] : (item.attributes?.[key] || '');
-
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={{padding: 5}}>
-          <Ionicons name="arrow-back" size={24} color="#334155" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>จัดการการรับคืนของ (Returns)</Text>
-        <View style={{width: 30}} />
+        <TouchableOpacity onPress={() => router.back()}><Ionicons name="arrow-back" size={24} color="#78350f" /></TouchableOpacity>
+        <Text style={styles.headerTitle}>รายการรอรับคืน ({returns.length})</Text>
+        <View style={{width: 24}} />
       </View>
 
       <FlatList
-        data={requests}
-        keyExtractor={(item) => (item.id || item.documentId).toString()}
-        renderItem={({ item }) => {
-          const status = getValue(item, 'return_status');
-          return (
-            <TouchableOpacity 
-              style={styles.card}
-              // เดี๋ยวเราจะไปสร้างหน้า Detail กันต่อครับ
-              onPress={() => router.push(`/product/approve_return/${item.documentId || item.id}` as any)}
-            >
-              <View style={styles.row}>
-                <Text style={styles.jobNo}>{getValue(item, 'job_no')}</Text>
-                <View style={[styles.badge, { backgroundColor: getStatusBg(status) }]}>
-                  <Text style={{ color: getStatusColor(status), fontSize: 12, fontWeight: 'bold' }}>
-                    {status}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.infoRow}>
-                <Ionicons name="person-outline" size={16} color="#64748b" />
-                <Text style={styles.infoText}>ผู้คืน: {getValue(getValue(item, 'return_by'), 'username') || 'ไม่ระบุ'}</Text>
-              </View>
-              
-              <View style={styles.infoRow}>
-                <Ionicons name="location-outline" size={16} color="#64748b" />
-                <Text style={styles.infoText}>ไซท์: {getValue(getValue(item, 'project_site'), 'name') || 'ไม่ระบุ'}</Text>
-              </View>
-
-              <Text style={styles.dateText}>📅 {new Date(getValue(item, 'createdAt')).toLocaleDateString('th-TH')}</Text>
-            </TouchableOpacity>
-          );
-        }}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchReturns} />}
+        data={returns}
+        keyExtractor={(item) => (item.documentId || item.id).toString()}
         contentContainerStyle={{ padding: 15 }}
-        ListEmptyComponent={!loading ? <Text style={styles.empty}>ไม่มีรายการคืนของ</Text> : <ActivityIndicator color="#f59e0b" />}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchReturns} />}
+        renderItem={({ item }) => (
+          <TouchableOpacity 
+            style={styles.card} 
+            // ลิงก์ไปหน้า Detail ที่จะสร้างใน step ต่อไป
+            onPress={() => router.push(`/product/return_detail/${item.documentId || item.id}` as any)}
+          >
+            <View style={styles.cardHeader}>
+              <Text style={styles.jobNo}>{item.job_no}</Text>
+              <View style={styles.badge}>
+                 <Text style={styles.badgeText}>รอรับของ</Text>
+              </View>
+            </View>
+            
+            <Text style={styles.siteText}>🏗️ {item.project_site?.name || 'ไม่ระบุไซท์'}</Text>
+            <Text style={styles.userText}>👤 คืนโดย: {item.return_by?.username || 'ไม่ระบุ'}</Text>
+
+            <View style={styles.divider} />
+            <View style={styles.footerRow}>
+               <Text style={styles.itemCount}>📦 {item.items?.length || 0} รายการ</Text>
+               <Text style={styles.dateText}>{new Date(item.createdAt).toLocaleDateString('th-TH')}</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+        ListEmptyComponent={!loading ? <Text style={styles.emptyText}>ไม่มีรายการค้างรับคืน</Text> : <ActivityIndicator />}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 60, paddingBottom: 15, paddingHorizontal: 15, backgroundColor: 'white' },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1e293b' },
-  card: { backgroundColor: 'white', borderRadius: 12, padding: 16, marginBottom: 12, elevation: 2 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+  container: { flex: 1, backgroundColor: '#fffbeb' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 50, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#fde68a' },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#78350f' },
+  card: { backgroundColor: 'white', borderRadius: 12, padding: 15, marginBottom: 12, elevation: 1, borderLeftWidth: 4, borderLeftColor: '#d97706' },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   jobNo: { fontSize: 16, fontWeight: 'bold', color: '#333' },
-  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  infoText: { color: '#475569', fontSize: 14 },
-  dateText: { marginTop: 8, fontSize: 12, color: '#94a3b8', textAlign: 'right' },
-  empty: { textAlign: 'center', marginTop: 50, color: '#94a3b8' }
+  badge: { backgroundColor: '#fff7ed', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  badgeText: { color: '#d97706', fontSize: 10, fontWeight: 'bold' },
+  siteText: { fontSize: 14, color: '#4b5563', marginBottom: 4 },
+  userText: { fontSize: 13, color: '#6b7280' },
+  divider: { height: 1, backgroundColor: '#fff7ed', marginVertical: 10 },
+  footerRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  itemCount: { fontSize: 12, color: '#d97706', fontWeight: 'bold' },
+  dateText: { fontSize: 12, color: '#9ca3af' },
+  emptyText: { textAlign: 'center', marginTop: 50, color: '#9ca3af' }
 });

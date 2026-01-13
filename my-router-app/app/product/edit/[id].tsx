@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   View, Text, TextInput, TouchableOpacity, Image, ScrollView, 
   Alert, ActivityIndicator, StyleSheet, SafeAreaView
@@ -16,7 +16,6 @@ export default function EditProductScreen() {
   const { token } = useAuth(); 
 
   const [name, setName] = useState('');
-  const [stock, setStock] = useState('');
   const [unit, setUnit] = useState(''); 
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | number | null>(null);
   const [categoriesList, setCategoriesList] = useState<any[]>([]); 
@@ -25,6 +24,13 @@ export default function EditProductScreen() {
   
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  // ✅ คำนวณสต็อกรวมอัตโนมัติ (Derived State)
+  const calculatedStock = useMemo(() => {
+    return stockLocations.reduce((sum, item) => {
+        return sum + (parseInt(item.on_hand_stock) || 0);
+    }, 0);
+  }, [stockLocations]);
 
   useEffect(() => {
     if (id && token) { initData(); }
@@ -57,7 +63,6 @@ export default function EditProductScreen() {
 
   const fetchProductData = async () => {
     try {
-      // ✅ Query แบบเจาะจง Field ป้องกัน Error 500 และ Loop
       const queryString = [
         'populate[image][fields][0]=url',
         'populate[category][fields][0]=name',
@@ -75,10 +80,8 @@ export default function EditProductScreen() {
       if (!data) return;
 
       setName(data.name || '');
-      setStock(data.stock?.toString() || '0');
       setUnit(data.unit || ''); 
       
-      // Logic เลือกหมวดหมู่ (Universal)
       if (data.category) {
         const catData = data.category.data || data.category; 
         const targetId = catData.documentId || catData.id;
@@ -116,16 +119,71 @@ export default function EditProductScreen() {
     }
   };
 
-  const handleImageAction = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.6 });
-    if (!result.canceled) {
-      const manipResult = await ImageManipulator.manipulateAsync(result.assets[0].uri, [{ resize: { width: 600 } }], { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG });
-      setImageUri(manipResult.uri);
+  // ==========================================
+  // 📸 ส่วนจัดการรูปภาพ (Camera & Gallery)
+  // ==========================================
+
+  // พระเอกของเรา: ฟังก์ชันย่อรูปแก้ A9 ค้าง
+  const processImage = async (uri: string) => {
+    try {
+      const result = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: 800 } }], // บีบความกว้างไม่เกิน 800px (ตามสูตร)
+        { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG } // คุณภาพ 60%
+      );
+      setImageUri(result.uri);
+    } catch (error) {
+      console.log("Resize Error:", error);
+      Alert.alert("ผิดพลาด", "ย่อไฟล์รูปไม่สำเร็จ");
     }
   };
 
+  const launchCamera = async () => {
+    // 1. ขอสิทธิ์กล้อง
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตให้แอพเข้าถึงกล้องถ่ายรูป');
+      return;
+    }
+
+    // 2. เปิดกล้อง
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7, // รับมา 70% ก่อนส่งไปย่อต่อ
+    });
+
+    if (!result.canceled) {
+      await processImage(result.assets[0].uri);
+    }
+  };
+
+  const launchLibrary = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (!result.canceled) {
+      await processImage(result.assets[0].uri);
+    }
+  };
+
+  const handleImageAction = () => {
+    Alert.alert("รูปภาพสินค้า", "เลือกแหล่งที่มา", [
+      { text: "📸 ถ่ายภาพใหม่", onPress: launchCamera },
+      { text: "🖼️ เลือกจากอัลบั้ม", onPress: launchLibrary },
+      { text: "ยกเลิก", style: "cancel" }
+    ]);
+  };
+
+  // ==========================================
+
   const handleSave = async () => {
-    if (!name || !stock) return Alert.alert("แจ้งเตือน", "กรุณากรอกข้อมูลให้ครบ");
+    if (!name) return Alert.alert("แจ้งเตือน", "กรุณากรอกชื่อสินค้า");
     try {
       setSubmitting(true);
       let uploadedImageId = null;
@@ -138,7 +196,7 @@ export default function EditProductScreen() {
         
         const uploadRes = await fetch(`${API_URL}/upload`, { 
             method: 'POST', 
-            headers: { 'Authorization': `Bearer ${token}` }, // FormData ไม่ต้องระบุ Content-Type
+            headers: { 'Authorization': `Bearer ${token}` },
             body: formData 
         });
         const uploadJson = await uploadRes.json();
@@ -149,7 +207,6 @@ export default function EditProductScreen() {
       const payload = { 
         data: { 
             name, 
-            stock: parseInt(stock), 
             unit, 
             category: selectedCategoryId, 
             image: uploadedImageId || undefined 
@@ -186,12 +243,25 @@ export default function EditProductScreen() {
           <TouchableOpacity onPress={handleImageAction} style={styles.imageWrapper}>
             {imageUri ? <Image source={{ uri: imageUri }} style={styles.image} /> : <Ionicons name="camera" size={40} color="#ccc" />}
           </TouchableOpacity>
+          <Text style={{fontSize: 12, color: '#999', marginTop: 5}}>แตะเพื่อเปลี่ยนรูป</Text>
         </View>
+
         <Text style={styles.label}>ชื่อสินค้า *</Text>
         <TextInput style={styles.input} value={name} onChangeText={setName} />
+        
         <View style={{flexDirection: 'row', gap: 15}}>
-          <View style={{flex: 1}}><Text style={styles.label}>สต็อกรวม</Text><TextInput style={styles.input} value={stock} keyboardType="numeric" onChangeText={setStock} /></View>
-          <View style={{flex: 1}}><Text style={styles.label}>หน่วยนับ</Text><TextInput style={styles.input} value={unit} onChangeText={setUnit} /></View>
+          <View style={{flex: 1}}>
+            <Text style={styles.label}>สต็อกรวม (นับจริง)</Text>
+            <TextInput 
+              style={[styles.input, { backgroundColor: '#f1f5f9', color: '#00796B', fontWeight: 'bold' }]} 
+              value={calculatedStock.toString()} 
+              editable={false} 
+            />
+          </View>
+          <View style={{flex: 1}}>
+            <Text style={styles.label}>หน่วยนับ</Text>
+            <TextInput style={styles.input} value={unit} onChangeText={setUnit} />
+          </View>
         </View>
 
         <Text style={styles.label}>หมวดหมู่</Text>
@@ -237,7 +307,8 @@ export default function EditProductScreen() {
         <TouchableOpacity 
           style={styles.addLocBtn} 
           onPress={() => router.push({
-            pathname: '/product/manage_stock_location',
+            //pathname: '/product/manage_stock_location',
+            pathname: '/product/stock_location/register', // ชี้ไปไฟล์ใหม่
             params: { productId: id } 
           })}
         >

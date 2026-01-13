@@ -19,6 +19,9 @@
       "relation": "manyToOne",
       "target": "api::product.product",
       "inversedBy": "withdrawal_items"
+    },
+    "location_snapshot": {
+      "type": "string"
     }
   }
 }

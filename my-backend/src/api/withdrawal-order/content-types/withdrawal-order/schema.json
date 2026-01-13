@@ -21,6 +21,9 @@
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::withdrawal-item.withdrawal-item"
+    },
+    "type": {
+      "type": "string"
     }
   }
 }
