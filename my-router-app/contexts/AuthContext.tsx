@@ -1,6 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+
+// 1. เพิ่ม type สำหรับรูปภาพ (Avatar)
+type AvatarData = {
+  url: string;
+  id: number;
+};
 // กำหนดหน้าตาข้อมูล User
 type UserData = {
   id: number;
@@ -8,6 +14,9 @@ type UserData = {
   email: string;
   position: string;
   documentId?: string; // เพิ่มเผื่อไว้สำหรับ Strapi v5
+  // ⭐ เพิ่ม 2 บรรทัดนี้ครับ
+  createdAt?: string;       // วันที่สมัคร
+  avatar?: AvatarData;      // รูปโปรไฟล์ (อาจจะ null ได้ถ้ายังไม่ได้อัปโหลด)
 };
 
 type AuthContextType = {

@@ -6,16 +6,20 @@ import {
   TouchableOpacity, 
   Alert, 
   StyleSheet, 
-  ActivityIndicator
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
+  Keyboard,
+  ScrollView
 } from 'react-native';
 import { useRouter } from 'expo-router';
-// 1. เปลี่ยนการ import: ไม่ใช้ AsyncStorage โดยตรงแล้ว แต่เรียกผ่าน Context แทน
 import { useAuth } from '../contexts/AuthContext'; 
 import { API_URL } from '@/constants/Config';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login } = useAuth(); // 2. ดึงฟังก์ชัน login มาใช้
+  const { login } = useAuth(); 
   
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -26,12 +30,13 @@ export default function LoginScreen() {
       Alert.alert('แจ้งเตือน', 'กรุณากรอกข้อมูลให้ครบถ้วน');
       return;
     }
+    Keyboard.dismiss();
 
     try {
       setLoading(true);
-      console.log('Trying to login with:', identifier);
+      console.log('1. Logging in...');
 
-      // ยิง API ไปที่ Strapi
+      // Step 1: ยิง Login ปกติเพื่อเอา Token
       const response = await fetch(`${API_URL}/auth/local`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -46,13 +51,30 @@ export default function LoginScreen() {
       if (data.error) {
         throw new Error(data.error.message);
       }
-
-      console.log('Login Success! User:', data.user.username);
       
-      // 3. จุดสำคัญ! สั่งให้ระบบจำว่า "ล็อกอินแล้ว" (อัปเดต state ทันที)
-      await login(data.jwt, data.user);
+      const jwt = data.jwt;
+      const userId = data.user.id;
 
-      // 4. พาเข้าหน้าหลัก (ตอนนี้ Dashboard จะรู้แล้วว่ามี user)
+      // ⭐⭐⭐ Step 2: (เพิ่มใหม่) ใช้ Token ไปดึงข้อมูล User ตัวเต็ม (พร้อม Avatar)
+      console.log('2. Fetching full profile with avatar...');
+      const fullProfileRes = await fetch(`${API_URL}/users/${userId}?populate=avatar`, {
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+        },
+      });
+
+      if (!fullProfileRes.ok) {
+        // ถ้าดึงรูปไม่ได้ ให้ใช้ข้อมูลเดิมไปก่อน กันแอปพัง
+        console.log('Failed to fetch full profile, using basic data');
+        await login(jwt, data.user);
+      } else {
+        const fullUser = await fullProfileRes.json();
+        console.log('>> Full User Data:', JSON.stringify(fullUser, null, 2));
+        
+        // ⭐ บันทึกข้อมูลตัวเต็ม (มี Avatar) ลงเครื่อง
+        await login(jwt, fullUser);
+      }
+
       router.replace('/'); 
 
     } catch (error: any) {
@@ -64,46 +86,56 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.card}>
-        <Text style={styles.title}>ยินดีต้อนรับ</Text>
-        <Text style={styles.subtitle}>ระบบเบิก-จ่าย อุปกรณ์ก่อสร้าง</Text>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>ชื่อผู้ใช้ หรือ อีเมล</Text>
-          <TextInput 
-            style={styles.input} 
-            placeholder="กรอกชื่อผู้ใช้..." 
-            value={identifier}
-            onChangeText={setIdentifier}
-            autoCapitalize="none" 
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>รหัสผ่าน</Text>
-          <TextInput 
-            style={styles.input} 
-            placeholder="กรอกรหัสผ่าน..." 
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry 
-          />
-        </View>
-
-        <TouchableOpacity 
-          style={styles.loginButton} 
-          onPress={handleLogin}
-          disabled={loading}
+    <KeyboardAvoidingView 
+      style={styles.container} 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent} 
+          keyboardShouldPersistTaps="handled"
         >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.loginButtonText}>เข้าสู่ระบบ</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-    </View>
+          <View style={styles.card}>
+            <Text style={styles.title}>ยินดีต้อนรับ</Text>
+            <Text style={styles.subtitle}>ระบบเบิก-จ่าย อุปกรณ์ก่อสร้าง</Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>ชื่อผู้ใช้ หรือ อีเมล</Text>
+              <TextInput 
+                style={styles.input} 
+                placeholder="กรอกชื่อผู้ใช้..." 
+                value={identifier}
+                onChangeText={setIdentifier}
+                autoCapitalize="none" 
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>รหัสผ่าน</Text>
+              <TextInput 
+                style={styles.input} 
+                placeholder="กรอกรหัสผ่าน..." 
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry 
+              />
+            </View>
+
+            <TouchableOpacity 
+              style={styles.loginButton} 
+              onPress={handleLogin}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.loginButtonText}>เข้าสู่ระบบ</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -111,7 +143,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#00796B',
-    justifyContent: 'center',
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center', 
     padding: 20,
   },
   card: {

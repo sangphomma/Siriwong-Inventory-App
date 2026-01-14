@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { 
   View, Text, StyleSheet, TouchableOpacity, ScrollView, 
-  Modal, TouchableWithoutFeedback 
+  Modal, TouchableWithoutFeedback, Image 
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../contexts/AuthContext'; // 1. เรียก Auth
+import { BASE_URL } from '../../constants/Config';    // 2. เรียก Config
 
 interface StoreKeeperProps {
   token: string | null;
@@ -12,15 +14,36 @@ interface StoreKeeperProps {
 
 export default function StoreKeeperView({ token }: StoreKeeperProps) {
   const router = useRouter();
+  const { user } = useAuth(); // 3. ดึง user data
   
-  // State สำหรับเปิด/ปิด เมนูเบิกจ่าย (Modal)
   const [showTransMenu, setShowTransMenu] = useState(false);
 
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={{ padding: 20 }}>
         
-        {/* Header Section */}
+        {/* ⭐ ส่วน Header Greeting + Avatar */}
+        <View style={styles.headerSection}>
+            <View style={{ flex: 1 }}>
+                <Text style={styles.greetingText}>สวัสดี, {user?.username} 📦</Text>
+                <Text style={styles.subText}>ดูแลคลังสินค้าให้เรียบร้อยนะครับ</Text>
+            </View>
+
+            <TouchableOpacity onPress={() => router.push('/profile' as any)}>
+                {user?.avatar?.url ? (
+                    <Image 
+                        source={{ uri: `${BASE_URL}${user.avatar.url}` }} 
+                        style={styles.avatar} 
+                    />
+                ) : (
+                    <View style={styles.avatarPlaceholder}>
+                        <Ionicons name="person" size={24} color="#94a3b8" />
+                    </View>
+                )}
+            </TouchableOpacity>
+        </View>
+        {/* ------------------------------- */}
+
         <View style={styles.menuSection}>
           <Text style={styles.sectionTitle}>เมนูหลัก 🏠</Text>
           
@@ -41,7 +64,7 @@ export default function StoreKeeperView({ token }: StoreKeeperProps) {
               {/* 2. ปุ่มสต็อก */}
               <TouchableOpacity 
                 style={[styles.menuBtn, { backgroundColor: '#f59e0b', flex: 1 }]} 
-                onPress={() => router.push('/product/list')}
+                onPress={() => router.push('/product/list' as any)}
               >
                 <Ionicons name="cube" size={28} color="white" />
                 <Text style={styles.menuBtnText}>เช็คสต็อก</Text>
@@ -50,12 +73,12 @@ export default function StoreKeeperView({ token }: StoreKeeperProps) {
 
             {/* แถวที่ 2: จัดการระบบ */}
             <View style={[styles.row, { marginTop: 10 }]}>
-              <TouchableOpacity style={[styles.menuBtn, { backgroundColor: '#0ea5e9' }]} onPress={() => router.push('/product/add')}>
+              <TouchableOpacity style={[styles.menuBtn, { backgroundColor: '#0ea5e9' }]} onPress={() => router.push('/product/add' as any)}>
                 <Ionicons name="add-circle" size={24} color="white" />
                 <Text style={styles.menuBtnText}>เพิ่มสินค้า</Text>
               </TouchableOpacity>
               
-              <TouchableOpacity style={[styles.menuBtn, { backgroundColor: '#8b5cf6' }]} onPress={() => router.push('/product/stock_location')}>
+              <TouchableOpacity style={[styles.menuBtn, { backgroundColor: '#8b5cf6' }]} onPress={() => router.push('/product/stock_location' as any)}>
                 <Ionicons name="business" size={24} color="white" />
                 <Text style={styles.menuBtnText}>จุดจัดเก็บ (Location)</Text>
               </TouchableOpacity>
@@ -65,7 +88,7 @@ export default function StoreKeeperView({ token }: StoreKeeperProps) {
             <View style={[styles.row, { marginTop: 10 }]}>
               <TouchableOpacity 
                 style={[styles.menuBtn, { backgroundColor: '#64748b' }]} 
-                onPress={() => router.push('/report')}
+                onPress={() => router.push('/report' as any)}
               >
                 <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
                     <Ionicons name="stats-chart" size={24} color="white" />
@@ -79,7 +102,7 @@ export default function StoreKeeperView({ token }: StoreKeeperProps) {
 
       </ScrollView>
 
-      {/* ✅ Modal เมนูย่อย (Transaction Menu) */}
+      {/* Modal เมนูย่อย (Transaction Menu) */}
       <Modal transparent visible={showTransMenu} animationType="fade">
         <TouchableWithoutFeedback onPress={() => setShowTransMenu(false)}>
           <View style={styles.modalOverlay}>
@@ -89,7 +112,7 @@ export default function StoreKeeperView({ token }: StoreKeeperProps) {
                     
                     <TouchableOpacity 
                         style={[styles.subMenuBtn, {backgroundColor: '#e0f2fe'}]}
-                        onPress={() => { setShowTransMenu(false); router.push('/product/withdraw'); }}
+                        onPress={() => { setShowTransMenu(false); router.push('/product/withdraw' as any); }}
                     >
                         <View style={[styles.iconBox, {backgroundColor:'#0ea5e9'}]}>
                              <Ionicons name="cart" size={24} color="white" />
@@ -104,7 +127,6 @@ export default function StoreKeeperView({ token }: StoreKeeperProps) {
                         style={[styles.subMenuBtn, {backgroundColor: '#dcfce7'}]}
                         onPress={() => { 
                             setShowTransMenu(false); 
-                            // 👉 ลิงก์ไปหน้ารวมรายการอนุมัติที่เราจะสร้างใน Step 2
                             router.push('/product/manage_requests' as any); 
                         }}
                     >
@@ -145,6 +167,24 @@ export default function StoreKeeperView({ token }: StoreKeeperProps) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
+  
+  // Header Avatar Style
+  headerSection: { 
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', 
+    marginBottom: 20, marginTop: 10 
+  },
+  greetingText: { fontSize: 22, fontWeight: 'bold', color: '#1e293b' },
+  subText: { fontSize: 13, color: '#64748b', marginTop: 2 },
+  avatar: { 
+    width: 50, height: 50, borderRadius: 25, 
+    borderWidth: 2, borderColor: 'white', backgroundColor: '#f1f5f9' 
+  },
+  avatarPlaceholder: {
+    width: 50, height: 50, borderRadius: 25,
+    backgroundColor: '#e2e8f0', justifyContent: 'center', alignItems: 'center',
+    borderWidth: 2, borderColor: 'white'
+  },
+
   menuSection: { marginBottom: 10 },
   sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#1e293b', marginBottom: 15, marginTop: 10 },
   menuGrid: { gap: 0 },

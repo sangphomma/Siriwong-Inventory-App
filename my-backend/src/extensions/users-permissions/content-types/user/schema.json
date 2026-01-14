@@ -66,17 +66,6 @@
       "inversedBy": "users",
       "configurable": false
     },
-    "position": {
-      "type": "enumeration",
-      "enum": [
-        "owner",
-        "manager",
-        "sale",
-        "foreman",
-        "store_keeper",
-        "technician"
-      ]
-    },
     "withdrawal_requests": {
       "type": "relation",
       "relation": "oneToMany",
@@ -94,6 +83,17 @@
       "relation": "oneToMany",
       "target": "api::transaction.transaction",
       "mappedBy": "action_by"
+    },
+    "avatar": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images",
+        "files"
+      ]
+    },
+    "position": {
+      "type": "string"
     }
   }
 }

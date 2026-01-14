@@ -14,14 +14,12 @@
     "product": {
       "type": "relation",
       "relation": "manyToOne",
-      "target": "api::product.product",
-      "inversedBy": "transactions"
+      "target": "api::product.product"
     },
     "location": {
       "type": "relation",
       "relation": "manyToOne",
-      "target": "api::location.location",
-      "inversedBy": "transactions"
+      "target": "api::location.location"
     },
     "type": {
       "type": "enumeration",
@@ -40,8 +38,7 @@
     "action_by": {
       "type": "relation",
       "relation": "manyToOne",
-      "target": "plugin::users-permissions.user",
-      "inversedBy": "transactions"
+      "target": "plugin::users-permissions.user"
     },
     "remark": {
       "type": "text"

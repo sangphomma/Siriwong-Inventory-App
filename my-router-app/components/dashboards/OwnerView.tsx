@@ -1,10 +1,10 @@
 import React, { useState, useCallback } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, RefreshControl, Image } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { API_URL } from '../../constants/Config';
+import { API_URL, BASE_URL } from '../../constants/Config'; // 1. เพิ่ม BASE_URL
 
-// รับ props 'user' เข้ามาใช้
+// รับ props 'user'
 export default function OwnerView({ user }: { user: any }) {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
@@ -17,7 +17,6 @@ export default function OwnerView({ user }: { user: any }) {
 
   const loadDashboardData = async () => {
     try {
-      // ... (Logic การดึงข้อมูล API เหมือนเดิมเป๊ะ) ...
       const resProducts = await fetch(`${API_URL}/products?pagination[pageSize]=1000`);
       const jsonProducts = await resProducts.json();
       const products = jsonProducts.data || [];
@@ -37,6 +36,29 @@ export default function OwnerView({ user }: { user: any }) {
 
   return (
     <ScrollView style={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+        
+        {/* ⭐ ส่วน Header Greeting + Avatar (เพิ่มใหม่) */}
+        <View style={styles.headerSection}>
+            <View style={{ flex: 1 }}>
+                <Text style={styles.greetingText}>สวัสดีครับ, บอส {user?.username} 😎</Text>
+                <Text style={styles.subText}>ภาพรวมกิจการวันนี้เป็นอย่างไรบ้าง?</Text>
+            </View>
+
+            <TouchableOpacity onPress={() => router.push('/profile' as any)}>
+                {user?.avatar?.url ? (
+                    <Image 
+                        source={{ uri: `${BASE_URL}${user.avatar.url}` }} 
+                        style={styles.avatar} 
+                    />
+                ) : (
+                    <View style={styles.avatarPlaceholder}>
+                        <Ionicons name="person" size={24} color="#94a3b8" />
+                    </View>
+                )}
+            </TouchableOpacity>
+        </View>
+        {/* ------------------------------------------- */}
+
         {/* ส่วน Stats */}
         <View style={styles.statsContainer}>
             <View style={[styles.statCard, { backgroundColor: '#e0f2fe' }]}>
@@ -56,7 +78,7 @@ export default function OwnerView({ user }: { user: any }) {
             </View>
         </View>
 
-        {/* เมนูหลัก (ของ Owner มีปุ่มครบ!) */}
+        {/* เมนูหลัก (ผู้จัดการ) */}
         <Text style={styles.sectionTitle}>เมนูหลัก (ผู้จัดการ)</Text>
         <View style={styles.menuContainer}>
             <TouchableOpacity style={[styles.menuBtn, { backgroundColor: '#4f46e5' }]} onPress={() => router.push('/product/withdraw' as any)}>
@@ -64,15 +86,17 @@ export default function OwnerView({ user }: { user: any }) {
                 <Text style={styles.menuBtnText}>เบิกสินค้า</Text>
             </TouchableOpacity>
 
-            {/* ปุ่มเพิ่มสินค้า (ไม่ต้องซ่อนแล้ว เพราะไฟล์นี้ให้ Owner เห็นเท่านั้น) */}
-            <TouchableOpacity style={[styles.menuBtn, { backgroundColor: '#0ea5e9' }]} onPress={() => router.push('/product/add' as any)}>
-                <Ionicons name="add-circle" size={32} color="white" />
-                <Text style={styles.menuBtnText}>เพิ่มสินค้า</Text>
-            </TouchableOpacity>
-
             <TouchableOpacity style={[styles.menuBtn, { backgroundColor: '#f59e0b' }]} onPress={() => router.push('/product/list' as any)}>
                 <Ionicons name="list" size={32} color="white" />
                 <Text style={styles.menuBtnText}>เช็คสต็อก</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+                style={[styles.menuBtn, { backgroundColor: '#10b981' }]} 
+                onPress={() => router.push('/admin/create_user' as any)} 
+            >
+                <Ionicons name="person-add" size={32} color="white" />
+                <Text style={styles.menuBtnText}>เพิ่มพนักงาน</Text>
             </TouchableOpacity>
         </View>
 
@@ -94,14 +118,32 @@ export default function OwnerView({ user }: { user: any }) {
 
 const styles = StyleSheet.create({
   content: { flex: 1, padding: 20 },
+  
+  // Styles สำหรับ Header Avatar
+  headerSection: { 
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', 
+    marginBottom: 25, marginTop: 10 
+  },
+  greetingText: { fontSize: 22, fontWeight: 'bold', color: '#1e293b' },
+  subText: { fontSize: 13, color: '#64748b', marginTop: 2 },
+  avatar: { 
+    width: 50, height: 50, borderRadius: 25, 
+    borderWidth: 2, borderColor: 'white', backgroundColor: '#f1f5f9' 
+  },
+  avatarPlaceholder: {
+    width: 50, height: 50, borderRadius: 25,
+    backgroundColor: '#e2e8f0', justifyContent: 'center', alignItems: 'center',
+    borderWidth: 2, borderColor: 'white'
+  },
+
   statsContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 25 },
   statCard: { width: '31%', padding: 15, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   statNumber: { fontSize: 20, fontWeight: 'bold', marginVertical: 5, color: '#333' },
   statLabel: { fontSize: 12, color: '#666' },
   sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, color: '#333' },
   menuContainer: { flexDirection: 'row', gap: 15, marginBottom: 30, flexWrap: 'wrap' },
-  menuBtn: { minWidth: '30%', flex: 1, padding: 20, borderRadius: 16, alignItems: 'center', justifyContent: 'center', height: 120, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5, elevation: 3 },
-  menuBtnText: { color: 'white', fontWeight: 'bold', fontSize: 16, marginTop: 10 },
+  menuBtn: { width: '30%', flexGrow: 1, padding: 20, borderRadius: 16, alignItems: 'center', justifyContent: 'center', height: 120, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5, elevation: 3 },
+  menuBtnText: { color: 'white', fontWeight: 'bold', fontSize: 16, marginTop: 10, textAlign: 'center' },
   historyItem: { flexDirection: 'row', backgroundColor: 'white', padding: 15, borderRadius: 12, marginBottom: 10, alignItems: 'flex-start' },
   historyIcon: { width: 40, height: 40, backgroundColor: '#f1f5f9', borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
   historyUser: { fontWeight: 'bold', fontSize: 16, color: '#333' },
