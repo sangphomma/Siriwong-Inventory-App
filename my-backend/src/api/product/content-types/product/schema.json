@@ -57,6 +57,9 @@
       "relation": "oneToMany",
       "target": "api::transaction.transaction",
       "mappedBy": "product"
+    },
+    "min_stock": {
+      "type": "integer"
     }
   }
 }

@@ -656,6 +656,7 @@ export interface ApiProductProduct extends Struct.CollectionTypeSchema {
     > &
       Schema.Attribute.Private;
     location: Schema.Attribute.Relation<'manyToOne', 'api::location.location'>;
+    min_stock: Schema.Attribute.Integer;
     name: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
     stock: Schema.Attribute.Integer;

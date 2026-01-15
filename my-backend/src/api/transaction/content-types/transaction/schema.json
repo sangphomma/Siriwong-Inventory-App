@@ -14,7 +14,8 @@
     "product": {
       "type": "relation",
       "relation": "manyToOne",
-      "target": "api::product.product"
+      "target": "api::product.product",
+      "inversedBy": "transactions"
     },
     "location": {
       "type": "relation",
