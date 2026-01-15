@@ -15,6 +15,12 @@ export const createTransaction = async ({
   token, productId, locationId, type, amount, docNo, userId, remark
 }: TransactionPayload) => {
   try {
+    // ป้องกันค่า Null ที่อาจหลุดมา
+    if (!productId || !locationId) {
+        console.error("❌ Transaction Failed: Missing Product or Location ID");
+        return;
+    }
+
     const payload = {
       data: {
         product: productId,
@@ -39,9 +45,10 @@ export const createTransaction = async ({
 
     if (!response.ok) {
       const error = await response.json();
-      console.error("Transaction Error:", error);
+      // แปลง Error Object เป็น String ให้ดูง่ายใน Log
+      console.error("Transaction Error Detail:", JSON.stringify(error, null, 2));
     } else {
-      console.log(`✅ Transaction Recorded: ${type} ${amount} @ ${docNo}`);
+      console.log(`✅ Transaction Recorded: ${type} ${amount} @ ${docNo} (Loc: ${locationId})`);
     }
   } catch (error) {
     console.error("Create Transaction Failed:", error);

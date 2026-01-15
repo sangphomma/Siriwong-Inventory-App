@@ -5,9 +5,11 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Print from 'expo-print'; // ✅ เพิ่ม Print
+import * as Sharing from 'expo-sharing'; // ✅ เพิ่ม Sharing
+
 import { API_URL } from '../../../constants/Config'; 
 import { useAuth } from '../../../contexts/AuthContext';
-// ✅ Import Helper
 import { createTransaction } from '../../../utils/transactionHelper';
 
 interface MasterLocation { id: number; documentId: string; name: string; }
@@ -16,7 +18,7 @@ interface StockRecord { id: number; documentId: string; on_hand_stock: number; l
 export default function ReturnDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams(); 
-  const { token, user } = useAuth(); // ✅ เอา user มาด้วย เพื่อบันทึกว่าใครทำรายการ
+  const { token, user } = useAuth();
 
   const [returnReq, setReturnReq] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -106,7 +108,6 @@ export default function ReturnDetailScreen() {
 
             if (qtyToAdd <= 0) continue;
 
-            // 1. Update Stock
             const key = generateKey(prodId, locId);
             const existingRecord = existingStockMap[key];
 
@@ -131,22 +132,20 @@ export default function ReturnDetailScreen() {
                 });
             }
 
-            // ✅ 2. Record Transaction (IN)
             if (token) {
                 await createTransaction({
                     token,
                     productId: prodId,
                     locationId: locId,
-                    type: 'in', // รับเข้า
+                    type: 'in', 
                     amount: qtyToAdd,
                     docNo: returnReq.job_no,
-                    userId: user?.id, // คนกดรับ (Store)
+                    userId: user?.id,
                     remark: `รับคืนจากไซท์: ${returnReq.project_site?.name || '-'}`
                 });
             }
         }
 
-        // 3. Update Status
         await fetch(`${API_URL}/return-requests/${returnReq.documentId}`, {
             method: 'PUT',
             headers,
@@ -168,6 +167,47 @@ export default function ReturnDetailScreen() {
     return existingStockMap[key]?.on_hand_stock || 0;
   };
 
+  // ✅ ฟังก์ชัน Print PDF ใบรับคืน
+  const printPDF = async () => {
+    if (!returnReq) return;
+    const htmlContent = `
+      <html>
+        <body style="font-family:Helvetica; padding:20px;">
+          <div style="border: 1px solid #3b82f6; padding: 20px;">
+            <h2 style="text-align:center; color:#1e40af;">ใบรับคืนสินค้า (Return Note)</h2>
+            <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                <div><b>เลขที่:</b> ${returnReq.job_no}</div>
+                <div><b>วันที่:</b> ${new Date(returnReq.updatedAt || new Date()).toLocaleDateString('th-TH')}</div>
+            </div>
+            <div style="margin-bottom:10px;">
+                <p><b>ผู้คืน:</b> ${returnReq.return_by?.username || '-'}</p>
+                <p><b>Site:</b> ${returnReq.project_site?.name || '-'}</p>
+            </div>
+            <table style="width:100%; border-collapse:collapse; margin-top:10px;">
+                <tr style="background:#eff6ff;">
+                    <th style="border:1px solid #bfdbfe; padding:8px;">สินค้า</th>
+                    <th style="border:1px solid #bfdbfe; padding:8px;">สภาพ</th>
+                    <th style="border:1px solid #bfdbfe; padding:8px;">จำนวน</th>
+                </tr>
+                ${returnReq.items.map((item:any) => `
+                    <tr>
+                        <td style="border:1px solid #bfdbfe; padding:8px;">${item.product.name}</td>
+                        <td style="border:1px solid #bfdbfe; padding:8px;">${item.condition || '-'}</td>
+                        <td style="border:1px solid #bfdbfe; padding:8px; text-align:center;">${item.qty_request || item.amount} ${item.product.unit || ''}</td>
+                    </tr>
+                `).join('')}
+            </table>
+             <br/><p style="text-align:right;">ลงชื่อผู้รับคืน .......................................................</p>
+          </div>
+        </body>
+      </html>
+    `;
+    try {
+      const { uri } = await Print.printToFileAsync({ html: htmlContent });
+      await Sharing.shareAsync(uri);
+    } catch (e) { Alert.alert("Error", "สร้าง PDF ไม่สำเร็จ"); }
+  };
+
   if (loading || !returnReq) return <View style={styles.center}><ActivityIndicator size="large" color="#d97706" /></View>;
   const isApproved = returnReq.return_status === 'approved';
 
@@ -176,7 +216,10 @@ export default function ReturnDetailScreen() {
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}><Ionicons name="arrow-back" size={24} color="#78350f" /></TouchableOpacity>
         <Text style={styles.headerTitle}>ตรวจสอบการคืนของ</Text>
-        <View style={{width: 24}} />
+        {/* ✅ ปุ่ม Print */}
+        <TouchableOpacity onPress={printPDF} style={{padding:5}}>
+            <Ionicons name="print-outline" size={24} color="#78350f" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content}>

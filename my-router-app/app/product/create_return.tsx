@@ -16,7 +16,8 @@ interface ProjectSite { documentId: string; id: number; name: string; }
 
 export default function CreateReturnScreen() {
   const router = useRouter();
-  const { token } = useAuth();
+  // ✅ 1. เพิ่ม user เพื่อเอา ID คนทำรายการ
+  const { token, user } = useAuth(); 
 
   // --- Data State ---
   const [sites, setSites] = useState<ProjectSite[]>([]);
@@ -105,9 +106,11 @@ export default function CreateReturnScreen() {
           return_status: 'pending',
           project_site: selectedSite.documentId || selectedSite.id,
           note: note,
+          // ✅ 2. ส่ง ID ของ User ไปด้วย (เพื่อให้ Report รู้ว่าใครคืน)
+          return_by: user?.id, 
+          
           items: cart.map(item => ({
             product: item.product.documentId || item.product.id,
-            // ✅ แก้ไขตรงนี้: เปลี่ยนจาก qty_return เป็น qty_request ตามภาพ Screenshot Strapi
             qty_request: item.qty, 
             condition: item.condition 
           }))

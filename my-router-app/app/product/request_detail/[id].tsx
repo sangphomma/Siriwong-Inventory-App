@@ -5,17 +5,25 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Print from 'expo-print'; // ✅ เพิ่ม Print
+import * as Sharing from 'expo-sharing'; // ✅ เพิ่ม Sharing
+
 import { API_URL } from '../../../constants/Config'; 
 import { useAuth } from '../../../contexts/AuthContext'; 
-// ✅ Import Helper
 import { createTransaction } from '../../../utils/transactionHelper';
 
 // --- Interfaces ---
+interface LocationMaster {
+  id: number;
+  documentId: string;
+  name: string;
+}
+
 interface StockLocation {
   id: number;
   documentId: string;
   name?: string;
-  location?: { name: string };
+  location?: LocationMaster; 
   on_hand_stock: number;
 }
 
@@ -39,29 +47,24 @@ interface RequestDetail {
   project_site?: { name: string };
   request_by?: { username: string };
   items: RequestItem[];
+  updatedAt?: string; // เพิ่ม Field นี้เพื่อใช้แสดงวันที่ใน PDF
 }
 
 export default function RequestDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams(); 
-  const { token, user } = useAuth(); // ✅ เอา user มาด้วย
+  const { token, user } = useAuth(); 
 
-  // --- State ---
   const [request, setRequest] = useState<RequestDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
 
-  // เก็บสต็อกที่มีให้เลือกของแต่ละสินค้า: { [productId]: StockLocation[] }
   const [availableStocks, setAvailableStocks] = useState<Record<string, StockLocation[]>>({});
-
-  // เก็บการจับคู่ว่า Item ไหน เอาจาก Location ไหน: { [itemId]: StockLocation }
   const [allocations, setAllocations] = useState<Record<number, StockLocation>>({});
 
-  // UI Modals
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [currentSelectingItem, setCurrentSelectingItem] = useState<RequestItem | null>(null);
 
-  // --- 1. Fetch Data ---
   useEffect(() => {
     if (id) {
         fetchRequestDetail(id as string);
@@ -107,7 +110,6 @@ export default function RequestDetailScreen() {
     }
   };
 
-  // --- 2. Selection Logic ---
   const handleOpenSelectLocation = (item: RequestItem) => {
     setCurrentSelectingItem(item);
     setShowLocationModal(true);
@@ -128,7 +130,6 @@ export default function RequestDetailScreen() {
     return loc.location?.name || loc.name || `Loc #${loc.id}`;
   };
 
-  // --- 3. Approval Logic (Core) ---
   const handleApprove = async () => {
     if (!request) return;
 
@@ -165,13 +166,11 @@ export default function RequestDetailScreen() {
             'Authorization': `Bearer ${token}` 
         };
 
-        // Step 1: วนลูปตัดสต็อกทีละรายการ + บันทึก Transaction
         for (const item of request.items) {
-            const location = allocations[item.id];
-            const newStock = location.on_hand_stock - item.qty_request;
+            const stockLoc = allocations[item.id];
+            const newStock = stockLoc.on_hand_stock - item.qty_request;
 
-            // Update Stock Location (PUT)
-            await fetch(`${API_URL}/stock-locations/${location.documentId}`, {
+            await fetch(`${API_URL}/stock-locations/${stockLoc.documentId}`, {
                 method: 'PUT',
                 headers,
                 body: JSON.stringify({
@@ -179,12 +178,13 @@ export default function RequestDetailScreen() {
                 })
             });
 
-            // ✅✅✅ บันทึก Transaction (OUT) ✅✅✅
-            if (token) {
+            const realLocationId = stockLoc.location?.documentId || stockLoc.location?.id;
+
+            if (token && realLocationId) {
                 await createTransaction({
                     token,
-                    productId: item.product.id,
-                    locationId: location.id,
+                    productId: item.product.documentId || item.product.id,
+                    locationId: realLocationId,
                     type: 'out',
                     amount: item.qty_request,
                     docNo: request.job_no,
@@ -194,7 +194,6 @@ export default function RequestDetailScreen() {
             }
         }
 
-        // Step 2: อัปเดตสถานะ Request เป็น approved
         const updateRes = await fetch(`${API_URL}/withdrawal-requests/${request.documentId}`, {
             method: 'PUT',
             headers,
@@ -219,6 +218,49 @@ export default function RequestDetailScreen() {
     }
   };
 
+  // ✅ ฟังก์ชัน Print PDF ใบเบิก
+  const printPDF = async () => {
+    if (!request) return;
+    const htmlContent = `
+      <html>
+        <body style="font-family:Helvetica; padding:20px;">
+          <div style="border: 1px solid #ccc; padding: 20px;">
+            <h2 style="text-align:center;">ใบเบิกสินค้า (Withdrawal Request)</h2>
+            <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                <div><b>เลขที่:</b> ${request.job_no}</div>
+                <div><b>วันที่:</b> ${new Date(request.updatedAt || new Date()).toLocaleDateString('th-TH')}</div>
+            </div>
+            <div style="margin-bottom:10px;">
+                <p><b>ผู้เบิก:</b> ${request.request_by?.username || '-'}</p>
+                <p><b>Site:</b> ${request.project_site?.name || '-'}</p>
+                <p><b>Note:</b> ${request.note || '-'}</p>
+            </div>
+            <table style="width:100%; border-collapse:collapse; margin-top:10px;">
+                <tr style="background:#eee;">
+                    <th style="border:1px solid #ddd; padding:8px;">รายการ</th>
+                    <th style="border:1px solid #ddd; padding:8px;">จำนวน</th>
+                </tr>
+                ${request.items.map((item, idx) => `
+                    <tr>
+                        <td style="border:1px solid #ddd; padding:8px;">${item.product.name}</td>
+                        <td style="border:1px solid #ddd; padding:8px; text-align:center;">${item.qty_request} ${item.product.unit || ''}</td>
+                    </tr>
+                `).join('')}
+            </table>
+            <div style="margin-top:40px; display:flex; justify-content:space-between;">
+                <div style="text-align:center;"><p>.......................................</p><p>ผู้เบิกของ</p></div>
+                <div style="text-align:center;"><p>.......................................</p><p>ผู้อนุมัติ/จ่ายของ</p></div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+    try {
+      const { uri } = await Print.printToFileAsync({ html: htmlContent });
+      await Sharing.shareAsync(uri);
+    } catch (e) { Alert.alert("Error", "สร้าง PDF ไม่สำเร็จ"); }
+  };
+
   if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#6366f1" /></View>;
   if (!request) return <View style={styles.center}><Text>ไม่พบข้อมูลใบเบิก</Text></View>;
   const isApproved = request.request_status === 'approved';
@@ -228,7 +270,10 @@ export default function RequestDetailScreen() {
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}><Ionicons name="arrow-back" size={24} /></TouchableOpacity>
         <Text style={styles.headerTitle}>ตรวจสอบใบเบิก</Text>
-        <View style={{width: 24}} /> 
+        {/* ✅ เพิ่มปุ่ม Print */}
+        <TouchableOpacity onPress={printPDF} style={{padding:5}}>
+            <Ionicons name="print-outline" size={24} color="#333" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content}>
@@ -371,7 +416,6 @@ export default function RequestDetailScreen() {
             </View>
         </View>
       </Modal>
-
     </SafeAreaView>
   );
 }

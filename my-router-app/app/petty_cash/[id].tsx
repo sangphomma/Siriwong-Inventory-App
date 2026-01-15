@@ -1,8 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Dimensions, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { API_URL } from '../../constants/Config';
 import { Ionicons } from '@expo/vector-icons';
+import * as Print from 'expo-print'; // ✅ 1. เพิ่ม Import Print
+import * as Sharing from 'expo-sharing'; // ✅ 1. เพิ่ม Import Sharing
 
 const { width } = Dimensions.get('window');
 
@@ -11,10 +13,107 @@ export default function PettyCashDetail() {
   const router = useRouter();
   const item = itemData ? JSON.parse(itemData as string) : null;
 
+  // ฟังก์ชันแปลง URL รูปภาพให้สมบูรณ์
+  const getFullUrl = (imgObj: any) => {
+    if (!imgObj || !imgObj.url) return null;
+    // เช็คว่า URL มี http อยู่แล้วหรือไม่ (กรณี Cloudinary/AWS) ถ้าไม่มีให้ต่อ Base URL
+    if (imgObj.url.startsWith('http')) return imgObj.url;
+    const baseUrl = API_URL.replace('/api', ''); 
+    return `${baseUrl}${imgObj.url}`;
+  };
+
   const getImgUrl = (imgObj: any) => {
     if (!imgObj || !imgObj.url) return null;
-    const baseUrl = API_URL.replace('/api', ''); 
-    return imgObj.url.startsWith('/') ? `${baseUrl}${imgObj.url}` : imgObj.url;
+    return getFullUrl(imgObj);
+  };
+
+  // ✅ 2. ฟังก์ชันสร้าง PDF สำหรับรายการเดียว
+  const printSinglePDF = async () => {
+    if (!item) return;
+
+    // เตรียม URL รูปภาพ
+    const slipUrl = getFullUrl(item.slip_image);
+    const receiptUrl = getFullUrl(item.receipt_image);
+    const productUrl = getFullUrl(item.product_image);
+
+    const htmlContent = `
+      <html>
+        <head>
+          <style>
+            body { font-family: 'Helvetica'; padding: 30px; color: #333; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+            .title { font-size: 24px; font-weight: bold; }
+            .subtitle { font-size: 14px; color: #666; }
+            .info-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            .info-table td { padding: 8px; border-bottom: 1px solid #ddd; vertical-align: top; }
+            .label { font-weight: bold; width: 120px; color: #555; }
+            .amount { font-size: 20px; font-weight: bold; color: #059669; }
+            .image-section { margin-top: 20px; page-break-inside: avoid; }
+            .img-box { margin-bottom: 20px; text-align: center; border: 1px solid #eee; padding: 10px; border-radius: 8px; }
+            img { max-width: 100%; max-height: 400px; object-fit: contain; }
+            .img-caption { margin-bottom: 5px; font-weight: bold; color: #555; font-size: 14px; text-align: left; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="title">ใบสำคัญจ่ายเงินสดย่อย</div>
+            <div class="subtitle">Siriwong Inventory System</div>
+          </div>
+
+          <table class="info-table">
+            <tr>
+              <td class="label">วันที่ทำรายการ:</td>
+              <td>${new Date(item.date).toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' })}</td>
+            </tr>
+            <tr>
+              <td class="label">ผู้เบิก:</td>
+              <td>${item.requested_bies?.[0]?.username || 'ไม่ระบุ'}</td>
+            </tr>
+            <tr>
+              <td class="label">Site งาน:</td>
+              <td>${item.project_sites?.[0]?.name || 'ทั่วไป'}</td>
+            </tr>
+            <tr>
+              <td class="label">รายละเอียด:</td>
+              <td>${item.description}</td>
+            </tr>
+            <tr>
+              <td class="label">จำนวนเงิน:</td>
+              <td class="amount">฿${Number(item.amount).toLocaleString()}</td>
+            </tr>
+          </table>
+
+          <h3>หลักฐานประกอบ (Attachments)</h3>
+          
+          <div class="image-section">
+            ${receiptUrl ? `
+              <div class="img-box">
+                <div class="img-caption">1. บิล / ใบเสร็จรับเงิน</div>
+                <img src="${receiptUrl}" />
+              </div>` : ''}
+            
+            ${slipUrl ? `
+              <div class="img-box">
+                <div class="img-caption">2. สลิปโอนเงิน / ใบกำกับภาษี</div>
+                <img src="${slipUrl}" />
+              </div>` : ''}
+
+            ${productUrl ? `
+              <div class="img-box">
+                <div class="img-caption">3. รูปสินค้า / หน้างาน</div>
+                <img src="${productUrl}" />
+              </div>` : ''}
+          </div>
+        </body>
+      </html>
+    `;
+
+    try {
+      const { uri } = await Print.printToFileAsync({ html: htmlContent });
+      await Sharing.shareAsync(uri);
+    } catch (error) {
+      Alert.alert("ผิดพลาด", "ไม่สามารถสร้าง PDF ได้");
+    }
   };
 
   if (!item) return <View style={styles.container}><Text>ไม่พบข้อมูล</Text></View>;
@@ -26,6 +125,11 @@ export default function PettyCashDetail() {
           <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>รายละเอียดการเบิกเงิน</Text>
+        
+        {/* ✅ 3. ปุ่ม Print มุมขวาบน */}
+        <TouchableOpacity onPress={printSinglePDF} style={styles.printBtn}>
+          <Ionicons name="print-outline" size={24} color="white" />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.mainCard}>
@@ -60,9 +164,10 @@ export default function PettyCashDetail() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
-  header: { backgroundColor: '#1e293b', padding: 20, paddingTop: 50, flexDirection: 'row', alignItems: 'center' },
+  header: { backgroundColor: '#1e293b', padding: 20, paddingTop: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, // ปรับ justifyContent
   backBtn: { padding: 5 },
-  headerTitle: { color: 'white', fontSize: 17, fontWeight: 'bold', marginLeft: 10 },
+  headerTitle: { color: 'white', fontSize: 17, fontWeight: 'bold', marginLeft: 10, flex: 1 },
+  printBtn: { padding: 5 }, // Style ปุ่ม Print
   mainCard: { backgroundColor: 'white', margin: 15, borderRadius: 15, padding: 20, elevation: 3 },
   descTitle: { fontSize: 18, fontWeight: 'bold', color: '#1e293b' },
   amountText: { fontSize: 32, fontWeight: 'bold', color: '#059669', marginVertical: 8 },

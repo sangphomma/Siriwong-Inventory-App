@@ -10,7 +10,6 @@ import * as Sharing from 'expo-sharing';
 
 import { API_URL } from '../../constants/Config';
 import { useAuth } from '../../contexts/AuthContext';
-// ✅ Import Helper
 import { createTransaction } from '../../utils/transactionHelper';
 
 // --- Interfaces ---
@@ -51,14 +50,22 @@ interface User {
     email: string;
 }
 
+// ✅ เพิ่ม Interface ProjectSite
+interface ProjectSite {
+  documentId: string;
+  id: number;
+  name: string;
+}
+
 export default function WithdrawScreen() {
   const router = useRouter();
-  const { token, user } = useAuth(); // ✅ เอา user มาด้วย
+  const { token, user } = useAuth();
 
   // --- Data State ---
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [users, setUsers] = useState<User[]>([]); 
+  const [sites, setSites] = useState<ProjectSite[]>([]); // ✅ เก็บรายการ Site
   const [activeStocks, setActiveStocks] = useState<StockLocation[]>([]); 
   const [cart, setCart] = useState<CartItem[]>([]);
   
@@ -69,11 +76,13 @@ export default function WithdrawScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [selectedSite, setSelectedSite] = useState<ProjectSite | null>(null); // ✅ เก็บ Site ที่เลือก
 
   // --- Modals ---
   const [showProductModal, setShowProductModal] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
+  const [showSiteModal, setShowSiteModal] = useState(false); // ✅ Modal เลือก Site
   
   const [tempSelectedProduct, setTempSelectedProduct] = useState<Product | null>(null);
   const [productSpecificLocations, setProductSpecificLocations] = useState<StockLocation[]>([]);
@@ -96,17 +105,19 @@ export default function WithdrawScreen() {
         `pagination[limit]=2000`
       ].join('&');
 
-      const [resCats, resProds, resStocks, resUsers] = await Promise.all([
+      const [resCats, resProds, resStocks, resUsers, resSites] = await Promise.all([
         fetch(`${API_URL}/categories`, { headers }),
         fetch(`${API_URL}/products?populate=*&pagination[pageSize]=1000`, { headers }),
         fetch(`${API_URL}/stock-locations?${stockQuery}`, { headers }),
-        fetch(`${API_URL}/users`, { headers })
+        fetch(`${API_URL}/users`, { headers }),
+        fetch(`${API_URL}/project-sites?filters[project_status][$eq]=active`, { headers }) // ✅ ดึง Site
       ]);
 
       const jsonCats = await resCats.json();
       const jsonProds = await resProds.json();
       const jsonStocks = await resStocks.json();
       const jsonUsers = await resUsers.json(); 
+      const jsonSites = await resSites.json();
 
       const rawProducts = jsonProds.data || [];
       const rawStocks = jsonStocks.data || [];
@@ -124,6 +135,7 @@ export default function WithdrawScreen() {
       setProducts(mappedProducts);
       setActiveStocks(rawStocks);
       setUsers(rawUsers);
+      setSites(jsonSites.data || []); // ✅ Set Sites
 
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -195,7 +207,8 @@ export default function WithdrawScreen() {
   };
 
   const handleConfirmWithdrawal = async () => {
-    if (!selectedUser) return Alert.alert("แจ้งเตือน", "กรุณาเลือกผู้เบิกสินค้าครับ");
+    if (!selectedUser) return Alert.alert("ข้อมูลไม่ครบ", "กรุณาเลือกผู้เบิกสินค้าครับ");
+    if (!selectedSite) return Alert.alert("ข้อมูลไม่ครบ", "กรุณาเลือกไซท์งานที่จะนำของไปใช้ครับ"); // ✅ Check Site
     if (cart.length === 0) return Alert.alert("แจ้งเตือน", "ตะกร้ายังว่างอยู่");
 
     setLoading(true);
@@ -204,6 +217,7 @@ export default function WithdrawScreen() {
       const withdrawalItemIds: any[] = [];
       const currentCart = [...cart];
       const userNameStr = selectedUser.username; 
+      const siteNameStr = selectedSite.name; // ✅ ชื่อ Site
       const docNo = `EXP-${new Date().getTime()}`; 
 
       for (const item of cart) {
@@ -220,28 +234,24 @@ export default function WithdrawScreen() {
           })
         });
 
-        // ✅✅✅ แก้ไขจุดที่ Error: ดึง ID ของ Master Location แทน Stock ID ✅✅✅
         if (token) {
-            // item.location คือ Stock Record
-            // item.location.location คือ Master Location ที่เราต้องการ
             const masterLocationId = item.location.location?.id; 
-
             if (masterLocationId) {
                 await createTransaction({
                     token,
                     productId: item.product.id,
-                    locationId: masterLocationId, // ✅ ใช้ ID ที่ถูกต้อง
+                    locationId: masterLocationId,
                     type: 'out',
                     amount: item.amount,
                     docNo: docNo,
                     userId: user?.id,
-                    remark: `เบิกด่วนหน้าเคาน์เตอร์ ผู้รับ: ${userNameStr}`
+                    // ✅ ใส่ชื่อ Site ลงใน Remark เพื่อให้ดูใน Stock Card รู้เรื่อง
+                    remark: `เบิกด่วนหน้าเคาน์เตอร์: ${userNameStr} (Site: ${siteNameStr})`
                 });
-            } else {
-                console.error("Master Location ID not found for stock record:", item.location.id);
             }
         }
 
+        // Create Withdrawal Item
         await fetch(`${API_URL}/withdrawal-items`, {
             method: 'POST',
             headers: { 
@@ -261,6 +271,7 @@ export default function WithdrawScreen() {
         });
       }
 
+      // Create Order
       await fetch(`${API_URL}/withdrawal-orders`, {
           method: 'POST',
           headers: { 
@@ -272,20 +283,24 @@ export default function WithdrawScreen() {
               user_name: userNameStr, 
               date: today, 
               withdrawal_items: withdrawalItemIds,
-              type: 'express_counter'
+              type: 'express_counter',
+              // ✅ ถ้าใน Strapi มี field 'project_site' หรือ 'note' ให้ส่งไปได้ตรงนี้
+              // แต่เบื้องต้นเราใส่ใน remark ของ Transaction ไว้แล้วเพื่อความชัวร์
+              note: `นำไปใช้ที่: ${siteNameStr}` 
             } 
           })
       });
 
       setCart([]);
       setSelectedUser(null);
+      setSelectedSite(null); // Reset Site
       
       Alert.alert(
         "✅ ตัดสต็อกสำเร็จ!", 
         "ระบบตัดยอดและบันทึกประวัติเรียบร้อยแล้ว",
         [
           { text: "ปิด", onPress: () => fetchInitialData() }, 
-          { text: "🖨️ PDF", onPress: () => { generatePdf(currentCart, userNameStr, today); fetchInitialData(); } }
+          { text: "🖨️ PDF", onPress: () => { generatePdf(currentCart, userNameStr, siteNameStr, today); fetchInitialData(); } }
         ]
       );
 
@@ -297,31 +312,40 @@ export default function WithdrawScreen() {
     }
   };
 
-  const generatePdf = async (items: CartItem[], user: string, date: string) => {
+  // ✅ เพิ่ม siteName เข้ามาใน PDF
+  const generatePdf = async (items: CartItem[], user: string, siteName: string, date: string) => {
     try {
         const htmlContent = `
         <html>
           <body style="font-family:Helvetica; padding:20px;">
-            <h2 style="text-align:center;">ใบเบิกสินค้า (Store Counter)</h2>
-            <div style="margin-bottom:20px; text-align:center;">
-                วันที่: ${date} <br/> ผู้เบิก: <b>${user}</b>
-            </div>
-            <table style="width:100%; border-collapse:collapse; margin-top:10px; font-size:14px;">
-                <tr style="background:#eee;">
-                    <th style="border:1px solid #ddd; padding:8px;">ลำดับ</th>
-                    <th style="border:1px solid #ddd; padding:8px;">สินค้า</th>
-                    <th style="border:1px solid #ddd; padding:8px;">จุดหยิบของ</th>
-                    <th style="border:1px solid #ddd; padding:8px;">จำนวน</th>
-                </tr>
-                ${items.map((item, idx) => `
-                    <tr>
-                        <td style="border:1px solid #ddd; padding:8px; text-align:center;">${idx+1}</td>
-                        <td style="border:1px solid #ddd; padding:8px;">${item.product.name}</td>
-                        <td style="border:1px solid #ddd; padding:8px;">${getLocationName(item.location)}</td>
-                        <td style="border:1px solid #ddd; padding:8px; text-align:center;">${item.amount}</td>
+            <div style="border: 2px solid #333; padding: 20px; border-radius: 10px;">
+                <h2 style="text-align:center; color: #333;">ใบเบิกสินค้า (Store Counter)</h2>
+                <hr/>
+                <div style="margin-bottom:20px; font-size: 16px;">
+                    <p><b>วันที่:</b> ${date}</p>
+                    <p><b>ผู้เบิก:</b> ${user}</p>
+                    <p><b>นำไปใช้ที่ (Site):</b> ${siteName}</p> 
+                </div>
+                
+                <table style="width:100%; border-collapse:collapse; margin-top:10px; font-size:14px;">
+                    <tr style="background:#4f46e5; color:white;">
+                        <th style="border:1px solid #ddd; padding:10px;">ลำดับ</th>
+                        <th style="border:1px solid #ddd; padding:10px;">รายการสินค้า</th>
+                        <th style="border:1px solid #ddd; padding:10px;">หยิบจากคลัง</th>
+                        <th style="border:1px solid #ddd; padding:10px;">จำนวน</th>
                     </tr>
-                `).join('')}
-            </table>
+                    ${items.map((item, idx) => `
+                        <tr>
+                            <td style="border:1px solid #ddd; padding:8px; text-align:center;">${idx+1}</td>
+                            <td style="border:1px solid #ddd; padding:8px;">${item.product.name}</td>
+                            <td style="border:1px solid #ddd; padding:8px;">${getLocationName(item.location)}</td>
+                            <td style="border:1px solid #ddd; padding:8px; text-align:center; font-weight:bold;">${item.amount}</td>
+                        </tr>
+                    `).join('')}
+                </table>
+                <br/>
+                <p style="text-align:right; margin-top:50px;">ลงชื่อผู้รับของ .......................................................</p>
+            </div>
           </body>
         </html>
         `;
@@ -350,8 +374,10 @@ export default function WithdrawScreen() {
       </View>
 
       <ScrollView style={styles.content}>
+        
+        {/* ส่วนเลือกข้อมูลหลัก */}
         <View style={styles.card}>
-            <Text style={styles.label}>👤 ผู้เบิกสินค้า</Text>
+            <Text style={styles.label}>👤 ผู้เบิกสินค้า *</Text>
             <TouchableOpacity 
                 style={styles.pickerBtn} 
                 onPress={() => setShowUserModal(true)}
@@ -360,6 +386,20 @@ export default function WithdrawScreen() {
                     {selectedUser ? selectedUser.username : "-- แตะเพื่อเลือกชื่อผู้เบิก --"}
                 </Text>
                 <Ionicons name="chevron-down" size={20} color="#64748b" />
+            </TouchableOpacity>
+
+            <View style={{height: 15}} />
+
+            {/* ✅ เพิ่มปุ่มเลือก Site */}
+            <Text style={styles.label}>🏗️ นำไปใช้ที่ (Project Site) *</Text>
+            <TouchableOpacity 
+                style={styles.pickerBtn} 
+                onPress={() => setShowSiteModal(true)}
+            >
+                <Text style={[styles.pickerText, !selectedSite && {color: '#94a3b8'}]}>
+                    {selectedSite ? selectedSite.name : "-- แตะเพื่อเลือกไซท์งาน --"}
+                </Text>
+                <Ionicons name="business" size={20} color="#64748b" />
             </TouchableOpacity>
         </View>
 
@@ -417,14 +457,15 @@ export default function WithdrawScreen() {
 
       <View style={styles.footer}>
         <TouchableOpacity 
-          style={[styles.submitBtn, (loading || cart.length === 0 || !selectedUser) && {backgroundColor: '#94a3b8'}]} 
+          style={[styles.submitBtn, (loading || cart.length === 0 || !selectedUser || !selectedSite) && {backgroundColor: '#94a3b8'}]} 
           onPress={handleConfirmWithdrawal} 
-          disabled={loading || cart.length === 0 || !selectedUser}
+          disabled={loading || cart.length === 0 || !selectedUser || !selectedSite}
         >
           {loading ? <ActivityIndicator color="white"/> : <Text style={styles.submitText}>✅ ตัดสต็อกทันที</Text>}
         </TouchableOpacity>
       </View>
 
+      {/* Product Modal */}
       <Modal visible={showProductModal} animationType="slide">
         <SafeAreaView style={{flex:1, backgroundColor: 'white'}}>
             <View style={styles.modalHeader}>
@@ -484,6 +525,7 @@ export default function WithdrawScreen() {
         </SafeAreaView>
       </Modal>
 
+      {/* Location Modal */}
       <Modal visible={showLocationModal} transparent animationType="fade">
          <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
@@ -514,6 +556,7 @@ export default function WithdrawScreen() {
          </View>
       </Modal>
 
+      {/* User Modal */}
       <Modal visible={showUserModal} animationType="slide">
         <SafeAreaView style={{flex:1, backgroundColor: 'white'}}>
             <View style={styles.modalHeader}>
@@ -541,6 +584,39 @@ export default function WithdrawScreen() {
                                 <Text style={{fontSize:16, fontWeight:'bold', color:'#333'}}>{item.username}</Text>
                                 <Text style={{fontSize:12, color:'#666'}}>{item.email}</Text>
                             </View>
+                        </View>
+                        <Ionicons name="chevron-forward" size={20} color="#cbd5e1" />
+                    </TouchableOpacity>
+                )}
+            />
+        </SafeAreaView>
+      </Modal>
+
+      {/* ✅ Site Modal (เพิ่มใหม่) */}
+      <Modal visible={showSiteModal} animationType="slide">
+        <SafeAreaView style={{flex:1, backgroundColor: 'white'}}>
+            <View style={styles.modalHeader}>
+                <TouchableOpacity onPress={() => setShowSiteModal(false)}><Ionicons name="close" size={28} /></TouchableOpacity>
+                <Text style={styles.modalTitle}>เลือกไซท์งาน / โครงการ</Text>
+                <View style={{width:28}}/>
+            </View>
+            <FlatList 
+                data={sites}
+                keyExtractor={(item) => (item.documentId || item.id).toString()}
+                contentContainerStyle={{padding: 10}}
+                renderItem={({item}) => (
+                    <TouchableOpacity 
+                        style={styles.productRow} 
+                        onPress={() => {
+                            setSelectedSite(item);
+                            setShowSiteModal(false);
+                        }}
+                    >
+                        <View style={{flexDirection:'row', alignItems:'center'}}>
+                            <View style={{width:40, height:40, borderRadius:8, backgroundColor:'#e0e7ff', justifyContent:'center', alignItems:'center', marginRight:15}}>
+                                <Ionicons name="business" size={20} color="#4f46e5" />
+                            </View>
+                            <Text style={{fontSize:16, fontWeight:'bold', color:'#333'}}>{item.name}</Text>
                         </View>
                         <Ionicons name="chevron-forward" size={20} color="#cbd5e1" />
                     </TouchableOpacity>
