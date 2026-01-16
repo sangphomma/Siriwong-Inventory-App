@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { 
   View, Text, FlatList, Image, TouchableOpacity, 
-  StyleSheet, TextInput, ActivityIndicator, Alert, ScrollView 
+  StyleSheet, TextInput, ActivityIndicator, Alert, ScrollView, RefreshControl 
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,12 +16,13 @@ export default function ProductListScreen() {
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false); // ✅ เพิ่ม state สำหรับ pull-to-refresh
 
   // --- State การกรองและค้นหา ---
   const [searchQuery, setSearchQuery] = useState(""); 
   const [selectedCategory, setSelectedCategory] = useState("all"); 
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
-  const [sortBy, setSortBy] = useState<'name' | 'stockAsc' | 'stockDesc'>('name');
+  const [sortBy, setSortBy] = useState<'name' | 'stockAsc' | 'stockDesc' | 'newest'>('newest'); // ✅ เพิ่ม newest
 
   useFocusEffect(
     useCallback(() => {
@@ -31,7 +32,8 @@ export default function ProductListScreen() {
 
   const fetchData = async () => {
     try {
-      if (products.length === 0) setLoading(true);
+      // ถ้าไม่ใช่การ refresh (เป็นการโหลดครั้งแรก) ให้หมุนติ้วๆ ใหญ่
+      if (!refreshing && products.length === 0) setLoading(true);
 
       const headers: any = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -42,12 +44,14 @@ export default function ProductListScreen() {
       setCategories(jsonCats.data || []);
 
       // 2. ดึงสินค้า
+      // ✅ เพิ่ม sort=createdAt:desc (ของใหม่มาบนสุด) เพื่อแก้ปัญหาหาของใหม่ไม่เจอ
       const queryString = [
         'populate[image][fields][0]=url',               
         'populate[category][fields][0]=name',           
         'populate[stock_locations][populate][location][fields][0]=name', 
         'populate[stock_locations][fields][0]=on_hand_stock',            
-        'pagination[pageSize]=1000'
+        'pagination[pageSize]=1000',
+        'sort=createdAt:desc' 
       ].join('&');
 
       const url = `${API_URL}/products?${queryString}`;
@@ -60,31 +64,34 @@ export default function ProductListScreen() {
       
     } catch (error) {
       console.error("Fetch Error:", error);
-      Alert.alert("ผิดพลาด", "โหลดข้อมูลไม่สำเร็จ");
+      // Alert.alert("ผิดพลาด", "โหลดข้อมูลไม่สำเร็จ"); // ปิด Alert ถี่ๆ เผื่อรำคาญ
     } finally {
       setLoading(false);
+      setRefreshing(false); // ปิดตัวหมุน refresh
     }
+  };
+
+  const onRefresh = () => {
+      setRefreshing(true);
+      fetchData();
   };
 
   // 🛠️ ฟังก์ชันแกะเปลือกหมวดหมู่
   const getCategoryName = (item: any) => {
       if (!item.category) return 'ทั่วไป';
-
       let catData = item.category;
       if (catData.data) catData = catData.data; 
       if (!catData) return 'ทั่วไป';
-
       if (catData.attributes?.name) return catData.attributes.name;
       if (catData.name) return catData.name;
-
+      
+      // Fallback หาจาก ID
       const targetId = catData.documentId || catData.id || catData; 
       const found = categories.find(c => {
           const cId = c.documentId || c.id; 
           return String(cId) === String(targetId);
       });
-
-      if (found) return found.attributes?.name || found.name || 'ทั่วไป';
-      return 'ทั่วไป';
+      return found ? (found.attributes?.name || found.name) : 'ทั่วไป';
   };
 
   // 🛠️ ฟังก์ชันช่วยคำนวณสต็อกจริงจาก Location
@@ -93,7 +100,7 @@ export default function ProductListScreen() {
     return locs.reduce((sum: number, loc: any) => sum + (parseInt(loc.on_hand_stock) || 0), 0);
   };
 
-  // Logic กรองและเรียง
+  // Logic กรองและเรียง (Client Side Sorting)
   const processedProducts = useMemo(() => {
     let result = [...products];
 
@@ -111,25 +118,27 @@ export default function ProductListScreen() {
       result = result.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
     }
 
-    // 3. กรองของใกล้หมด (ใช้ Real Stock)
+    // 3. กรองของใกล้หมด
     if (showLowStockOnly) {
       result = result.filter(p => calculateRealStock(p) <= 5);
     }
 
-    // 4. เรียงลำดับ
+    // 4. เรียงลำดับ (Client Side Override)
     if (sortBy === 'name') {
         result.sort((a, b) => a.name.localeCompare(b.name));
     } else if (sortBy === 'stockAsc') {
         result.sort((a, b) => calculateRealStock(a) - calculateRealStock(b));
     } else if (sortBy === 'stockDesc') {
         result.sort((a, b) => calculateRealStock(b) - calculateRealStock(a));
-    }
+    } 
+    // ถ้า sortBy === 'newest' ไม่ต้องทำอะไร เพราะ API ส่งมาแบบนั้นแล้ว
 
     return result;
   }, [products, selectedCategory, searchQuery, showLowStockOnly, sortBy, categories]);
 
   const showSortMenu = () => {
     Alert.alert("จัดเรียง", "เลือกรูปแบบ", [
+        { text: "ล่าสุด (มาใหม่)", onPress: () => setSortBy('newest') },
         { text: "ชื่อ (ก-ฮ)", onPress: () => setSortBy('name') },
         { text: "สต็อก (น้อย->มาก)", onPress: () => setSortBy('stockAsc') },
         { text: "สต็อก (มาก->น้อย)", onPress: () => setSortBy('stockDesc') },
@@ -137,23 +146,21 @@ export default function ProductListScreen() {
     ]);
   };
 
-const handlePressItem = (item: any) => {
+  const handlePressItem = (item: any) => {
     const realStock = calculateRealStock(item);
     
-    // กรณีเป็น User ทั่วไป (ดูได้อย่างเดียว)
+    // Check Role
     if (user?.position !== 'owner' && user?.position !== 'store_keeper') {
        const catName = getCategoryName(item);
        Alert.alert("📦 ข้อมูลสินค้า", `${item.name}\nคงเหลือ: ${realStock}\nหมวดหมู่: ${catName}`, [{ text: "รับทราบ" }]);
        return;
     }
 
-    // กรณีเป็น Store Keeper / Owner (มีเมนูจัดการ)
     Alert.alert(
         "จัดการสินค้า", 
         `"${item.name}"\nคงเหลือ: ${realStock}`, 
         [
             { text: "ยกเลิก", style: "cancel" },
-            // 👇 เพิ่มปุ่มนี้ครับ
             { 
                 text: "📜 ดูประวัติ (Stock Card)", 
                 onPress: () => router.push(`/product/stock_card/${item.documentId || item.id}` as any) 
@@ -172,7 +179,7 @@ const handlePressItem = (item: any) => {
       : null;
     const stockLocations = item.stock_locations || [];
     const categoryName = getCategoryName(item);
-    const realStock = calculateRealStock(item); // 🔥 คำนวณสต็อกจริงตรงนี้
+    const realStock = calculateRealStock(item);
     
     return (
       <TouchableOpacity style={styles.card} onPress={() => handlePressItem(item)}>
@@ -198,7 +205,6 @@ const handlePressItem = (item: any) => {
             )}
           </View>
           
-          {/* แสดงผลสต็อกที่คำนวณจริง */}
           <Text style={[styles.stock, realStock <= 5 ? {color: '#dc2626'} : {color: '#16a34a'}]}>
              คงเหลือ: {realStock}
           </Text>
@@ -244,10 +250,16 @@ const handlePressItem = (item: any) => {
       ) : (
         <FlatList
           data={processedProducts}
-          extraData={[categories, products]} // Trigger re-render เมื่อ products เปลี่ยน
-          keyExtractor={(item: any) => item.documentId || item.id.toString()}
+          extraData={[categories, products]}
+          keyExtractor={(item: any) => (item.documentId || item.id).toString()}
           renderItem={renderItem}
           contentContainerStyle={{ padding: 15 }}
+          
+          // ✅ เพิ่ม Pull to Refresh
+          refreshControl={
+             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#00796B"]} />
+          }
+          
           ListEmptyComponent={<Text style={{textAlign: 'center', marginTop: 50, color: '#999'}}>ไม่พบสินค้า</Text>}
         />
       )}

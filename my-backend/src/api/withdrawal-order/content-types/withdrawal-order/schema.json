@@ -24,6 +24,9 @@
     },
     "type": {
       "type": "string"
+    },
+    "note": {
+      "type": "text"
     }
   }
 }

@@ -917,6 +917,7 @@ export interface ApiWithdrawalOrderWithdrawalOrder
       'api::withdrawal-order.withdrawal-order'
     > &
       Schema.Attribute.Private;
+    note: Schema.Attribute.Text;
     publishedAt: Schema.Attribute.DateTime;
     type: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;

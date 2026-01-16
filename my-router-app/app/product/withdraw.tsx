@@ -206,23 +206,31 @@ export default function WithdrawScreen() {
     return `Location #${loc?.id || 'Unknown'}`;
   };
 
+// ... (ส่วนบนของไฟล์ withdraw.tsx เหมือนเดิม) ...
+
+ // ... imports และ code ส่วนอื่นคงเดิม
+
   const handleConfirmWithdrawal = async () => {
     if (!selectedUser) return Alert.alert("ข้อมูลไม่ครบ", "กรุณาเลือกผู้เบิกสินค้าครับ");
-    if (!selectedSite) return Alert.alert("ข้อมูลไม่ครบ", "กรุณาเลือกไซท์งานที่จะนำของไปใช้ครับ"); // ✅ Check Site
+    if (!selectedSite) return Alert.alert("ข้อมูลไม่ครบ", "กรุณาเลือกไซท์งานที่จะนำของไปใช้ครับ");
     if (cart.length === 0) return Alert.alert("แจ้งเตือน", "ตะกร้ายังว่างอยู่");
 
     setLoading(true);
     try {
       const today = new Date().toISOString().split('T')[0];
-      const withdrawalItemIds: any[] = [];
+      const withdrawalItemIds: string[] = []; // เก็บ Document ID
       const currentCart = [...cart];
       const userNameStr = selectedUser.username; 
-      const siteNameStr = selectedSite.name; // ✅ ชื่อ Site
+      const siteNameStr = selectedSite.name; 
       const docNo = `EXP-${new Date().getTime()}`; 
 
+      console.log("--- เริ่มต้นการบันทึก ---");
+
+      // Loop ทำรายการทีละชิ้น
       for (const item of cart) {
         const newStock = item.location.on_hand_stock - item.amount;
         
+        // 1. ตัดสต็อก (PUT)
         await fetch(`${API_URL}/stock-locations/${item.location.documentId || item.location.id}`, {
           method: 'PUT',
           headers: { 
@@ -234,6 +242,7 @@ export default function WithdrawScreen() {
           })
         });
 
+        // 2. บันทึก Transaction (Log)
         if (token) {
             const masterLocationId = item.location.location?.id; 
             if (masterLocationId) {
@@ -245,14 +254,13 @@ export default function WithdrawScreen() {
                     amount: item.amount,
                     docNo: docNo,
                     userId: user?.id,
-                    // ✅ ใส่ชื่อ Site ลงใน Remark เพื่อให้ดูใน Stock Card รู้เรื่อง
                     remark: `เบิกด่วนหน้าเคาน์เตอร์: ${userNameStr} (Site: ${siteNameStr})`
                 });
             }
         }
 
-        // Create Withdrawal Item
-        await fetch(`${API_URL}/withdrawal-items`, {
+        // 3. สร้าง Withdrawal Item (เขียนแบบละเอียดเพื่อดัก Error)
+        const itemRes = await fetch(`${API_URL}/withdrawal-items`, {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
@@ -261,56 +269,85 @@ export default function WithdrawScreen() {
             body: JSON.stringify({ 
               data: { 
                 amount: item.amount, 
-                product: item.product.documentId,
-                location_snapshot: getLocationName(item.location) 
+                product: item.product.documentId, // ใช้ Document ID ของ Product
+                location_snapshot: getLocationName(item.location),
+                publishedAt: new Date(), 
               } 
             })
-        }).then(async (res) => {
-           const json = await res.json();
-           if(json.data) withdrawalItemIds.push(json.data.documentId || json.data.id);
         });
+
+        const itemJson = await itemRes.json();
+        
+        if (!itemRes.ok) {
+            console.error("Item Create Error:", itemJson);
+            throw new Error(`สร้างรายการสินค้าไม่ผ่าน: ${item.product.name}`);
+        }
+
+        // ✅ ดึง ID ที่ถูกต้อง (Strapi V5 ใช้ documentId เป็นหลัก)
+        const createdId = itemJson.data?.documentId || itemJson.data?.id;
+        if (createdId) {
+            withdrawalItemIds.push(createdId);
+            console.log(`✅ สร้าง Item สำเร็จ ID: ${createdId}`);
+        }
       }
 
-      // Create Order
-      await fetch(`${API_URL}/withdrawal-orders`, {
+      console.log("📦 เตรียมสร้าง Order ด้วย IDs:", withdrawalItemIds);
+
+      // 4. สร้าง Withdrawal Order
+      const orderPayload = { 
+        data: { 
+          user_name: userNameStr, 
+          date: today, 
+          withdrawal_items: withdrawalItemIds, // ส่ง Array ของ IDs ไปผูก
+          type: 'express_counter',
+          note: `นำไปใช้ที่: ${siteNameStr}`,
+          publishedAt: new Date(), 
+        } 
+      };
+
+      const orderRes = await fetch(`${API_URL}/withdrawal-orders`, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({ 
-            data: { 
-              user_name: userNameStr, 
-              date: today, 
-              withdrawal_items: withdrawalItemIds,
-              type: 'express_counter',
-              // ✅ ถ้าใน Strapi มี field 'project_site' หรือ 'note' ให้ส่งไปได้ตรงนี้
-              // แต่เบื้องต้นเราใส่ใน remark ของ Transaction ไว้แล้วเพื่อความชัวร์
-              note: `นำไปใช้ที่: ${siteNameStr}` 
-            } 
-          })
+          body: JSON.stringify(orderPayload)
       });
+
+      const orderJson = await orderRes.json();
+
+      // 🛑 จุดตาย: เช็คว่า Server ตอบกลับมาว่า OK ไหม?
+      if (!orderRes.ok) {
+          console.error("❌ Order Create Error:", JSON.stringify(orderJson));
+          // แสดง Error จาก Server ให้เรารู้
+          const serverMsg = orderJson.error?.message || "Unknown Error";
+          throw new Error(`สร้าง Order ไม่สำเร็จ: ${serverMsg}`);
+      }
+
+      console.log("✅ สร้าง Order สำเร็จ:", orderJson);
 
       setCart([]);
       setSelectedUser(null);
-      setSelectedSite(null); // Reset Site
+      setSelectedSite(null);
       
       Alert.alert(
-        "✅ ตัดสต็อกสำเร็จ!", 
-        "ระบบตัดยอดและบันทึกประวัติเรียบร้อยแล้ว",
+        "✅ สำเร็จสมบูรณ์!", 
+        "ตัดสต็อกและสร้างใบเบิกเรียบร้อยแล้ว",
         [
           { text: "ปิด", onPress: () => fetchInitialData() }, 
           { text: "🖨️ PDF", onPress: () => { generatePdf(currentCart, userNameStr, siteNameStr, today); fetchInitialData(); } }
         ]
       );
 
-    } catch (error) {
-      console.error(error);
-      Alert.alert("Error", "เกิดข้อผิดพลาดในการเชื่อมต่อ");
+    } catch (error: any) {
+      console.error("Withdraw Error:", error);
+      Alert.alert("เกิดข้อผิดพลาด", error.message);
     } finally {
       setLoading(false);
     }
   };
+
+  // ... (ส่วนล่างของไฟล์ withdraw.tsx เหมือนเดิม) ...
 
   // ✅ เพิ่ม siteName เข้ามาใน PDF
   const generatePdf = async (items: CartItem[], user: string, siteName: string, date: string) => {
