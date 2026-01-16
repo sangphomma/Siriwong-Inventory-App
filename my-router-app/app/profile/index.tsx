@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  View, Text, StyleSheet, TouchableOpacity, Image, Alert, ActivityIndicator, ScrollView 
+  View, Text, StyleSheet, TouchableOpacity, Image, Alert, ActivityIndicator, ScrollView, TextInput 
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -10,6 +10,164 @@ import { useAuth } from '../../contexts/AuthContext';
 // Import BASE_URL มาใช้
 import { API_URL, BASE_URL } from '../../constants/Config';
 
+// --- Component ย่อย: ส่วนเปลี่ยนรหัสผ่าน ---
+const ChangePasswordSection = ({ token }: { token: string | null }) => {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // State สำหรับควบคุมการเปิด/ปิดลูกตา
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const handleChangePassword = async () => {
+    // 1. Validation
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      Alert.alert('แจ้งเตือน', 'กรุณากรอกข้อมูลให้ครบถ้วน');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      Alert.alert('แจ้งเตือน', 'รหัสผ่านใหม่ไม่ตรงกัน');
+      return;
+    }
+    if (newPassword.length < 6) {
+      Alert.alert('แจ้งเตือน', 'รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // 2. เรียก API Strapi
+      const response = await fetch(`${API_URL}/auth/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          currentPassword: currentPassword,
+          password: newPassword,
+          passwordConfirmation: confirmPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        // จัดการ Error message จาก Strapi
+        throw new Error(data?.error?.message || 'เกิดข้อผิดพลาด');
+      }
+
+      // 3. สำเร็จ
+      Alert.alert('สำเร็จ', 'เปลี่ยนรหัสผ่านเรียบร้อยแล้ว ✅', [
+        {
+          text: 'ตกลง',
+          onPress: () => {
+            setCurrentPassword('');
+            setNewPassword('');
+            setConfirmPassword('');
+          },
+        },
+      ]);
+    } catch (error: any) {
+      console.log('Change Password Error:', error);
+      Alert.alert('ผิดพลาด', 'รหัสผ่านปัจจุบันไม่ถูกต้อง หรือระบบขัดข้อง');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <View style={styles.passwordSection}>
+      <Text style={styles.sectionHeader}>เปลี่ยนรหัสผ่าน</Text>
+      
+      {/* 1. รหัสผ่านปัจจุบัน */}
+      <Text style={styles.inputLabel}>รหัสผ่านปัจจุบัน</Text>
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={styles.input}
+          secureTextEntry={!showCurrentPassword} // สลับโหมดซ่อน/โชว์
+          value={currentPassword}
+          onChangeText={setCurrentPassword}
+          placeholder="กรอกรหัสปัจจุบัน"
+          placeholderTextColor="#94a3b8"
+        />
+        <TouchableOpacity 
+          style={styles.eyeIcon} 
+          onPress={() => setShowCurrentPassword(!showCurrentPassword)}
+        >
+          <Ionicons 
+            name={showCurrentPassword ? "eye" : "eye-off"} 
+            size={20} 
+            color="#64748b" 
+          />
+        </TouchableOpacity>
+      </View>
+
+      {/* 2. รหัสผ่านใหม่ */}
+      <Text style={styles.inputLabel}>รหัสผ่านใหม่</Text>
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={styles.input}
+          secureTextEntry={!showNewPassword}
+          value={newPassword}
+          onChangeText={setNewPassword}
+          placeholder="กรอกรหัสใหม่ (ขั้นต่ำ 6 ตัว)"
+          placeholderTextColor="#94a3b8"
+        />
+        <TouchableOpacity 
+          style={styles.eyeIcon} 
+          onPress={() => setShowNewPassword(!showNewPassword)}
+        >
+          <Ionicons 
+            name={showNewPassword ? "eye" : "eye-off"} 
+            size={20} 
+            color="#64748b" 
+          />
+        </TouchableOpacity>
+      </View>
+
+      {/* 3. ยืนยันรหัสผ่านใหม่ */}
+      <Text style={styles.inputLabel}>ยืนยันรหัสผ่านใหม่</Text>
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={styles.input}
+          secureTextEntry={!showConfirmPassword}
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+          placeholder="ยืนยันรหัสใหม่อีกครั้ง"
+          placeholderTextColor="#94a3b8"
+        />
+        <TouchableOpacity 
+          style={styles.eyeIcon} 
+          onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+        >
+          <Ionicons 
+            name={showConfirmPassword ? "eye" : "eye-off"} 
+            size={20} 
+            color="#64748b" 
+          />
+        </TouchableOpacity>
+      </View>
+
+      <TouchableOpacity
+        style={[styles.saveButton, loading && { opacity: 0.7 }]}
+        onPress={handleChangePassword}
+        disabled={loading}
+      >
+        {loading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.saveButtonText}>บันทึกรหัสผ่านใหม่</Text>
+        )}
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+// --- Main Screen ---
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, token, login } = useAuth();
@@ -17,11 +175,9 @@ export default function ProfileScreen() {
   const [currentImage, setCurrentImage] = useState<string | null>(null);
 
   useEffect(() => {
-    // เช็คว่ามีรูปไหม และ log ออกมาดู
     console.log("User in Context:", JSON.stringify(user, null, 2));
     
     if (user?.avatar?.url) {
-      // ต่อ URL ให้สมบูรณ์: BASE_URL + relative path
       const fullUrl = `${BASE_URL}${user.avatar.url}`;
       console.log("Setting Image URL:", fullUrl);
       setCurrentImage(fullUrl);
@@ -52,7 +208,6 @@ export default function ProfileScreen() {
     });
 
     if (!result.canceled && result.assets[0].uri) {
-      // โชว์รูป Local ทันที
       setCurrentImage(result.assets[0].uri);
       processAndUpload(result.assets[0].uri);
     }
@@ -63,10 +218,8 @@ export default function ProfileScreen() {
     setUploading(true);
 
     try {
-      console.log("1. Optimizing...");
       const optimizedUri = await optimizeImage(rawUri);
 
-      console.log("2. Uploading...");
       const formData = new FormData();
       const fileName = optimizedUri.split('/').pop();
       formData.append('files', {
@@ -75,7 +228,6 @@ export default function ProfileScreen() {
         type: 'image/jpeg',
       } as any);
 
-      // Upload ยิงไปที่ API_URL (/api/upload)
       const uploadRes = await fetch(`${API_URL}/upload`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
@@ -85,9 +237,7 @@ export default function ProfileScreen() {
       if (!uploadRes.ok) throw new Error('Upload failed');
       const uploadData = await uploadRes.json();
       const imageId = uploadData[0].id;
-      console.log(">> Uploaded ID:", imageId);
 
-      console.log("3. Linking...");
       const updateUserRes = await fetch(`${API_URL}/users/${user.id}`, {
         method: 'PUT',
         headers: {
@@ -99,7 +249,6 @@ export default function ProfileScreen() {
 
       if (!updateUserRes.ok) throw new Error('Update user failed');
 
-      console.log("4. Fetching fresh user...");
       const refreshRes = await fetch(`${API_URL}/users/${user.id}?populate=avatar`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -107,11 +256,8 @@ export default function ProfileScreen() {
       if (!refreshRes.ok) throw new Error('Fetch fresh user failed');
       
       const freshUser = await refreshRes.json();
-      console.log(">> Fresh User Data:", JSON.stringify(freshUser, null, 2));
-
       await login(token, freshUser);
       
-      // อัปเดต state เป็นรูปใหม่จาก Server
       if (freshUser.avatar?.url) {
          setCurrentImage(`${BASE_URL}${freshUser.avatar.url}?t=${new Date().getTime()}`);
       }
@@ -141,7 +287,7 @@ export default function ProfileScreen() {
             <Image 
                 source={{ uri: currentImage }} 
                 style={styles.avatar} 
-                onError={(e) => console.log("Image Load Error:", e.nativeEvent.error)} // ดัก Error รูป
+                onError={(e) => console.log("Image Load Error:", e.nativeEvent.error)} 
             />
           ) : (
             <View style={[styles.avatar, styles.placeholderAvatar]}>
@@ -178,6 +324,14 @@ export default function ProfileScreen() {
             <Text style={styles.label}>รหัสพนักงาน (ID)</Text>
             <Text style={styles.value}>#{user?.id}</Text>
         </View>
+
+        {/* ส่วนเปลี่ยนรหัสผ่าน */}
+        <View style={styles.divider} />
+        <ChangePasswordSection token={token} />
+        
+        {/* พื้นที่ว่างด้านล่างเพื่อให้ Scroll ได้สุด */}
+        <View style={{ marginBottom: 40 }} />
+
       </View>
     </ScrollView>
   );
@@ -214,5 +368,60 @@ const styles = StyleSheet.create({
     paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f1f5f9'
   },
   label: { color: '#64748b', fontSize: 14 },
-  value: { fontWeight: '600', color: '#333', fontSize: 14 }
+  value: { fontWeight: '600', color: '#333', fontSize: 14 },
+  
+  // Styles สำหรับส่วนเปลี่ยนรหัสผ่าน
+  passwordSection: {
+    width: '100%',
+    marginTop: 10,
+  },
+  sectionHeader: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 15,
+  },
+  inputLabel: {
+    fontSize: 14,
+    color: '#64748b',
+    marginBottom: 5,
+  },
+  // ปรับ InputContainer ให้ซ้อนไอคอนลูกตาได้
+  inputContainer: {
+    position: 'relative', // เพื่อให้วางลูกตาแบบ absolute ได้
+    marginBottom: 15,
+  },
+  input: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    padding: 10,
+    paddingRight: 40, // เว้นที่ด้านขวาไม่ให้ตัวหนังสือทับรูปลูกตา
+    fontSize: 16,
+    color: '#333',
+  },
+  eyeIcon: {
+    position: 'absolute',
+    right: 10,
+    top: 12, // ปรับให้กึ่งกลางตามความสูง input
+    zIndex: 1,
+  },
+  saveButton: {
+    backgroundColor: '#0ea5e9',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 5,
+    shadowColor: "#0ea5e9",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
 });

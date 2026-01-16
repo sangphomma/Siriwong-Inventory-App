@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "my-router-app",
+    "name": "Siriwong Inv",
     "slug": "my-router-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -18,8 +18,10 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
+      "package": "com.siriwong.inventory",
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "usesCleartextTraffic": true
     },
     "web": {
       "output": "static",
@@ -27,6 +29,7 @@
     },
     "plugins": [
       "expo-router",
+      "@react-native-community/datetimepicker",
       [
         "expo-splash-screen",
         {
@@ -39,11 +42,24 @@
           }
         }
       ],
-      "@react-native-community/datetimepicker"
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "6582defa-e974-4c2a-9a68-68e767d7872e"
+      }
     }
   }
 }
