@@ -109,6 +109,22 @@ export default function ReportMenuScreen() {
                           </View>
                       </TouchableOpacity>
 
+                      {/* ✅ 3. [เพิ่มใหม่] รายงานเลือกเอง (Manual) */}
+                <TouchableOpacity style={styles.optionBtn} onPress={() => {
+                    setShowInventoryOptions(false);
+                    router.push('/report/manual_selection_report' as any);
+                }}>
+                    <View style={[styles.miniIcon, {backgroundColor:'#fef3c7'}]}>
+                        <Ionicons name="checkbox-outline" size={24} color="#d97706" />
+                    </View>
+                    <View>
+                        <Text style={styles.optionTitle}>เลือกรายการเอง (Manual)</Text>
+                        <Text style={styles.optionSub}>เลือกสินค้าทีละชิ้น เพื่อสร้าง PDF</Text>
+                    </View>
+                </TouchableOpacity>
+
+                
+
                       <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowInventoryOptions(false)}>
                           <Text style={{color:'#64748b'}}>ยกเลิก</Text>
                       </TouchableOpacity>

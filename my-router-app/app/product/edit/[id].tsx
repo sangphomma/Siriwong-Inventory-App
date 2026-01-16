@@ -17,6 +17,8 @@ export default function EditProductScreen() {
 
   const [name, setName] = useState('');
   const [unit, setUnit] = useState(''); 
+  const [minStock, setMinStock] = useState(''); // ✅ ยังคงไว้ เพื่อตั้งค่าแจ้งเตือน
+
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | number | null>(null);
   const [categoriesList, setCategoriesList] = useState<any[]>([]); 
   const [stockLocations, setStockLocations] = useState<any[]>([]); 
@@ -25,7 +27,7 @@ export default function EditProductScreen() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  // ✅ คำนวณสต็อกรวมอัตโนมัติ (Derived State)
+  // คำนวณสต็อกรวมอัตโนมัติ (ไว้โชว์เฉยๆ)
   const calculatedStock = useMemo(() => {
     return stockLocations.reduce((sum, item) => {
         return sum + (parseInt(item.on_hand_stock) || 0);
@@ -81,6 +83,7 @@ export default function EditProductScreen() {
 
       setName(data.name || '');
       setUnit(data.unit || ''); 
+      setMinStock(data.min_stock ? data.min_stock.toString() : ''); // ดึงค่า min_stock
       
       if (data.category) {
         const catData = data.category.data || data.category; 
@@ -97,79 +100,27 @@ export default function EditProductScreen() {
     } catch (error) { console.error("Fetch Data Error:", error); }
   };
 
-  const handleLocalStockChange = (locId: string | number, text: string) => {
-    setStockLocations(prev => prev.map(item => {
-        if ((item.documentId || item.id) === locId) return { ...item, on_hand_stock: text };
-        return item;
-    }));
-  };
-
-  const handleUpdateLocationStock = async (stockLocId: string, newQty: string) => {
-    const val = parseInt(newQty);
-    if (isNaN(val)) return; 
-    try {
-      const res = await fetch(`${API_URL}/stock-locations/${stockLocId}`, {
-        method: 'PUT', headers: getHeaders(),
-        body: JSON.stringify({ data: { on_hand_stock: val } })
-      });
-      if (!res.ok) throw new Error("Update Failed");
-    } catch (error) { 
-        Alert.alert("Error", "อัปเดตไม่สำเร็จ");
-        fetchProductData(); 
-    }
-  };
-
-  // ==========================================
-  // 📸 ส่วนจัดการรูปภาพ (Camera & Gallery)
-  // ==========================================
-
-  // พระเอกของเรา: ฟังก์ชันย่อรูปแก้ A9 ค้าง
+  // --- Image Logic (เหมือนเดิม) ---
   const processImage = async (uri: string) => {
     try {
       const result = await ImageManipulator.manipulateAsync(
-        uri,
-        [{ resize: { width: 800 } }], // บีบความกว้างไม่เกิน 800px (ตามสูตร)
-        { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG } // คุณภาพ 60%
+        uri, [{ resize: { width: 800 } }], 
+        { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG } 
       );
       setImageUri(result.uri);
-    } catch (error) {
-      console.log("Resize Error:", error);
-      Alert.alert("ผิดพลาด", "ย่อไฟล์รูปไม่สำเร็จ");
-    }
+    } catch (error) { Alert.alert("ผิดพลาด", "ย่อไฟล์รูปไม่สำเร็จ"); }
   };
 
   const launchCamera = async () => {
-    // 1. ขอสิทธิ์กล้อง
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตให้แอพเข้าถึงกล้องถ่ายรูป');
-      return;
-    }
-
-    // 2. เปิดกล้อง
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7, // รับมา 70% ก่อนส่งไปย่อต่อ
-    });
-
-    if (!result.canceled) {
-      await processImage(result.assets[0].uri);
-    }
+    if (status !== 'granted') return Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตกล้อง');
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+    if (!result.canceled) await processImage(result.assets[0].uri);
   };
 
   const launchLibrary = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-    });
-
-    if (!result.canceled) {
-      await processImage(result.assets[0].uri);
-    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+    if (!result.canceled) await processImage(result.assets[0].uri);
   };
 
   const handleImageAction = () => {
@@ -179,16 +130,15 @@ export default function EditProductScreen() {
       { text: "ยกเลิก", style: "cancel" }
     ]);
   };
+  // ------------------------------
 
-  // ==========================================
-
+  // ✅ ฟังก์ชันบันทึก (Safe Mode)
   const handleSave = async () => {
     if (!name) return Alert.alert("แจ้งเตือน", "กรุณากรอกชื่อสินค้า");
     try {
       setSubmitting(true);
       let uploadedImageId = null;
       
-      // Upload Image
       if (imageUri && !imageUri.startsWith('http')) {
         const formData = new FormData();
         const filename = imageUri.split('/').pop() || 'upload.jpg';
@@ -203,11 +153,12 @@ export default function EditProductScreen() {
         uploadedImageId = uploadJson[0].id;
       }
 
-      // Update Product
+      // ⚠️ PAYLOAD นี้ส่งเฉพาะข้อมูลที่เกี่ยวกับตัวสินค้า ไม่แตะต้อง Stock/Location
       const payload = { 
         data: { 
             name, 
             unit, 
+            min_stock: parseInt(minStock) || 0, // อัปเดตแค่ค่าแจ้งเตือน
             category: selectedCategoryId, 
             image: uploadedImageId || undefined 
         } 
@@ -226,19 +177,10 @@ export default function EditProductScreen() {
 
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: 'white'}}>
-      <Stack.Screen options={{ 
-        title: 'แก้ไขสินค้า & จุดจัดเก็บ',
-        headerRight: () => (
-          <TouchableOpacity onPress={() => Alert.alert("ยืนยัน", "ลบสินค้านี้?", [
-            {text: "ยกเลิก"}, {text: "ลบ", style: 'destructive', onPress: async () => {
-              await fetch(`${API_URL}/products/${id}`, { method: 'DELETE', headers: getHeaders() });
-              router.back();
-            }}
-          ])}><MaterialIcons name="delete" size={24} color="#ef4444" /></TouchableOpacity>
-        )
-      }} />
+      <Stack.Screen options={{ title: 'แก้ไขรายละเอียดสินค้า' }} />
 
       <ScrollView style={styles.container} contentContainerStyle={{paddingBottom: 120}}>
+        {/* Image */}
         <View style={styles.imageSection}>
           <TouchableOpacity onPress={handleImageAction} style={styles.imageWrapper}>
             {imageUri ? <Image source={{ uri: imageUri }} style={styles.image} /> : <Ionicons name="camera" size={40} color="#ccc" />}
@@ -246,22 +188,42 @@ export default function EditProductScreen() {
           <Text style={{fontSize: 12, color: '#999', marginTop: 5}}>แตะเพื่อเปลี่ยนรูป</Text>
         </View>
 
+        {/* Info Form */}
         <Text style={styles.label}>ชื่อสินค้า *</Text>
         <TextInput style={styles.input} value={name} onChangeText={setName} />
         
         <View style={{flexDirection: 'row', gap: 15}}>
+           {/* Read Only Stock Display */}
           <View style={{flex: 1}}>
-            <Text style={styles.label}>สต็อกรวม (นับจริง)</Text>
-            <TextInput 
-              style={[styles.input, { backgroundColor: '#f1f5f9', color: '#00796B', fontWeight: 'bold' }]} 
-              value={calculatedStock.toString()} 
-              editable={false} 
-            />
+            <Text style={styles.label}>สต็อกรวม (ปัจจุบัน)</Text>
+            <View style={[styles.input, { backgroundColor: '#f1f5f9', justifyContent:'center' }]}>
+                 <Text style={{color: '#64748b', fontWeight: 'bold', fontSize:16}}>
+                    {calculatedStock}
+                 </Text>
+            </View>
           </View>
           <View style={{flex: 1}}>
             <Text style={styles.label}>หน่วยนับ</Text>
             <TextInput style={styles.input} value={unit} onChangeText={setUnit} />
           </View>
+        </View>
+
+        {/* Min Stock Setting */}
+        <View style={{marginTop: 15}}>
+            <Text style={styles.label}>จำนวนแจ้งเตือนขั้นต่ำ (Min Stock)</Text>
+            <View style={{flexDirection:'row', alignItems:'center'}}>
+                <TextInput 
+                    style={[styles.input, {flex:1, borderColor: '#fca5a5', borderWidth: 1}]} 
+                    value={minStock} 
+                    onChangeText={setMinStock} 
+                    keyboardType="numeric"
+                    placeholder="0"
+                />
+                <Text style={{marginLeft:10, color:'#666', fontSize: 14}}>
+                    {unit || 'หน่วย'}
+                </Text>
+            </View>
+            <Text style={{fontSize:11, color:'#ef4444', marginTop:4}}>* หากสต็อกต่ำกว่าค่านี้ รายงานจะแจ้งเตือน (แต่ไม่มีผลต่อจำนวนของ)</Text>
         </View>
 
         <Text style={styles.label}>หมวดหมู่</Text>
@@ -279,46 +241,43 @@ export default function EditProductScreen() {
         </View>
 
         <View style={styles.divider} />
-        <Text style={styles.sectionTitle}>📍 สต็อกแยกตามจุดจัดเก็บ</Text>
         
-        {stockLocations.length === 0 && (
-             <Text style={{color: '#999', fontStyle: 'italic', marginBottom: 10}}>ยังไม่มีข้อมูลจุดจัดเก็บ</Text>
-        )}
+        {/* Location Display (Read Only) */}
+        <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:15}}>
+            <Text style={styles.sectionTitle}>📍 ตำแหน่งจัดเก็บ (View Only)</Text>
+            <TouchableOpacity onPress={() => router.push({ pathname: '/product/stock_location/register', params: { productId: id } })}>
+                <Text style={{color:'#00796B', fontWeight:'bold', fontSize:12}}>+ เพิ่มจุดเก็บใหม่</Text>
+            </TouchableOpacity>
+        </View>
 
-        {stockLocations.map((item) => {
-            const currentId = item.documentId || item.id;
-            return (
-              <View key={currentId} style={styles.locCard}>
-                <View style={{flex: 1}}>
-                  <Text style={styles.locName}>{item.location?.name || 'จุดจัดเก็บ (รอระบุ)'}</Text>
-                  <Text style={styles.locSub}>จำนวนปัจจุบัน:</Text>
+        {stockLocations.length === 0 ? (
+             <Text style={{color: '#999', fontStyle: 'italic', marginBottom: 10, textAlign:'center'}}>ยังไม่มีข้อมูลจุดจัดเก็บ</Text>
+        ) : (
+            stockLocations.map((item) => (
+              <View key={item.documentId || item.id} style={styles.locCardReadOnly}>
+                <View style={{flexDirection:'row', alignItems:'center', gap:10}}>
+                   <Ionicons name="location-sharp" size={20} color="#64748b" />
+                   <Text style={styles.locName}>{item.location?.name || 'Unknown'}</Text>
                 </View>
-                <TextInput 
-                  style={styles.locInput} 
-                  keyboardType="numeric"
-                  value={item.on_hand_stock?.toString() || '0'} 
-                  onChangeText={(text) => handleLocalStockChange(currentId, text)}
-                  onEndEditing={(e) => handleUpdateLocationStock(currentId, e.nativeEvent.text)}
-                />
+                <View style={{backgroundColor:'#f0fdf4', paddingHorizontal:10, paddingVertical:4, borderRadius:6}}>
+                    <Text style={{fontWeight:'bold', color:'#15803d'}}>{item.on_hand_stock} {unit}</Text>
+                </View>
               </View>
-            );
-        })}
+            ))
+        )}
         
-        <TouchableOpacity 
-          style={styles.addLocBtn} 
-          onPress={() => router.push({
-            //pathname: '/product/manage_stock_location',
-            pathname: '/product/stock_location/register', // ชี้ไปไฟล์ใหม่
-            params: { productId: id } 
-          })}
-        >
-          <Ionicons name="add-circle" size={20} color="#00796B" /><Text style={styles.addLocText}> ลงทะเบียนเข้าจุดเก็บเพิ่ม</Text>
-        </TouchableOpacity>
+        <View style={styles.infoBox}>
+            <Ionicons name="information-circle" size={20} color="#3b82f6" />
+            <Text style={{fontSize:12, color:'#334155', flex:1, marginLeft:8}}>
+                หากต้องการปรับปรุงยอดคงเหลือ กรุณาใช้เมนู <Text style={{fontWeight:'bold'}}>Audit (ปรับยอดสต็อก)</Text> หรือทำรายการ เบิก/รับคืน
+            </Text>
+        </View>
+
       </ScrollView>
 
       <View style={styles.footer}>
         <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={submitting}>
-            {submitting ? <ActivityIndicator color="white" /> : <Text style={styles.saveBtnText}>บันทึกข้อมูลหลัก</Text>}
+            {submitting ? <ActivityIndicator color="white" /> : <Text style={styles.saveBtnText}>บันทึกข้อมูลทั่วไป</Text>}
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -332,19 +291,19 @@ const styles = StyleSheet.create({
   imageWrapper: { width: 120, height: 120, borderRadius: 15, backgroundColor: '#f8fafc', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0', overflow: 'hidden' },
   image: { width: '100%', height: '100%' },
   label: { fontSize: 14, fontWeight: 'bold', marginBottom: 8, color: '#475569', marginTop: 15 },
-  input: { backgroundColor: '#f8fafc', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0', fontSize: 16 },
+  input: { backgroundColor: 'white', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0', fontSize: 16 },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: 'white', borderWidth: 1, borderColor: '#e2e8f0' },
   chipActive: { backgroundColor: '#00796B', borderColor: '#00796B' },
   chipText: { fontSize: 12, color: '#64748b' },
   divider: { height: 1, backgroundColor: '#f1f5f9', marginVertical: 25 },
-  sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#1e293b', marginBottom: 15 },
-  locCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', padding: 15, borderRadius: 12, marginBottom: 10, borderWidth: 1, borderColor: '#f1f5f9', elevation: 1 },
-  locName: { fontSize: 14, fontWeight: 'bold', color: '#334155' },
-  locSub: { fontSize: 11, color: '#94a3b8' },
-  locInput: { backgroundColor: '#f1f5f9', width: 80, padding: 8, borderRadius: 8, textAlign: 'center', fontWeight: 'bold', fontSize: 16, color: '#00796B' },
-  addLocBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 10, padding: 10 },
-  addLocText: { color: '#00796B', fontWeight: 'bold' },
+  sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#1e293b' },
+  
+  // New Read-Only Styles
+  locCardReadOnly: { flexDirection: 'row', justifyContent:'space-between', alignItems: 'center', backgroundColor: '#f8fafc', padding: 15, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: '#f1f5f9' },
+  locName: { fontSize: 14, fontWeight: '500', color: '#334155' },
+  infoBox: { flexDirection:'row', backgroundColor:'#eff6ff', padding:15, borderRadius:10, marginTop:15, alignItems:'center' },
+
   footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, backgroundColor: 'white', borderTopWidth: 1, borderTopColor: '#f1f5f9' },
   saveBtn: { backgroundColor: '#00796B', padding: 16, borderRadius: 12, alignItems: 'center' },
   saveBtnText: { color: 'white', fontWeight: 'bold', fontSize: 16 }
