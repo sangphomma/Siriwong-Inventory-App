@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { API_URL } from '../../constants/Config';
 import { useAuth } from '../../contexts/AuthContext';
 
-// --- Interfaces (เลียนแบบจาก withdraw.tsx แต่ปรับให้เข้ากับ Request) ---
+// --- Interfaces ---
 interface Category { documentId: string; name: string; }
 
 interface Product { 
@@ -73,8 +73,10 @@ export default function CreateRequestScreen() {
       // 2. ดึง Categories
       const catUrl = `${API_URL}/categories`;
 
-      // 3. ดึง Products และ StockLocations เพื่อคำนวณยอดรวม
-      const prodUrl = `${API_URL}/products?populate=*&pagination[pageSize]=1000`;
+      // 3. ดึง Products และ StockLocations
+      // ✅ แก้จุดที่ 1: เพิ่ม &sort=createdAt:desc (ให้สินค้าใหม่ล่าสุดเด้งมาบนสุด)
+      const prodUrl = `${API_URL}/products?populate=*&pagination[pageSize]=1000&sort=createdAt:desc`;
+      
       const stockUrl = `${API_URL}/stock-locations?filters[on_hand_stock][$gt]=0&populate[product][fields][0]=documentId&pagination[limit]=2000`;
 
       const [resSites, resCats, resProds, resStocks] = await Promise.all([
@@ -164,11 +166,12 @@ export default function CreateRequestScreen() {
           request_status: 'pending', // สถานะรออนุมัติ
           project_site: selectedSite.documentId || selectedSite.id,
           note: note,
-          // user หรือ creator จะถูกผูกโดยอัตโนมัติจาก Token ใน Strapi
+          // ✅ แก้จุดที่ 2: เพิ่ม publishedAt: new Date() เพื่อให้ข้อมูลไม่ติดสถานะ Draft
+          publishedAt: new Date(), 
+          
           items: cart.map(item => ({
             product: item.product.documentId || item.product.id, // ส่ง Product ID
             qty_request: item.qty
-            // *สำคัญ* เรายังไม่ส่ง location_id เพราะ Store จะเป็นคนเลือกตอน Approve
           }))
         }
       };
@@ -222,7 +225,7 @@ export default function CreateRequestScreen() {
 
       <ScrollView style={styles.content}>
         
-        {/* Section 1: Project Site Selection (สิ่งที่ Technician ต้องเลือก) */}
+        {/* Section 1: Project Site Selection */}
         <View style={styles.card}>
           <Text style={styles.label}>🏗️ ไซท์งาน / โครงการ *</Text>
           <TouchableOpacity style={styles.pickerBtn} onPress={() => setShowSiteModal(true)}>
@@ -242,7 +245,7 @@ export default function CreateRequestScreen() {
           />
         </View>
 
-        {/* Section 2: Cart List (Style เหมือน Withdraw แต่ไม่มี Location) */}
+        {/* Section 2: Cart List */}
         <View style={styles.listHeader}>
           <Text style={styles.sectionTitle}>📦 รายการเบิก ({cart.length})</Text>
           <TouchableOpacity onPress={() => setShowProductModal(true)} style={styles.addBtn}>
@@ -301,7 +304,7 @@ export default function CreateRequestScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Modal 1: Product Selection (เหมือน Withdraw เป๊ะ) */}
+      {/* Modal 1: Product Selection */}
       <Modal visible={showProductModal} animationType="slide">
         <SafeAreaView style={{flex:1, backgroundColor: 'white'}}>
             <View style={styles.modalHeader}>
@@ -310,7 +313,6 @@ export default function CreateRequestScreen() {
                 <View style={{width:28}}/>
             </View>
             
-            {/* Categories Tabs */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catScroll}>
                 <TouchableOpacity style={[styles.catTab, selectedCategory === 'all' && styles.catTabActive]} onPress={() => setSelectedCategory('all')}>
                     <Text style={[styles.catText, selectedCategory === 'all' && styles.catTextActive]}>ทั้งหมด</Text>
@@ -360,7 +362,7 @@ export default function CreateRequestScreen() {
         </SafeAreaView>
       </Modal>
 
-      {/* Modal 2: Site Selection (แบบเดิมแต่ปรับ Style ให้เข้าชุด) */}
+      {/* Modal 2: Site Selection */}
       <Modal visible={showSiteModal} animationType="slide">
         <SafeAreaView style={{flex: 1, backgroundColor: 'white'}}>
           <View style={styles.modalHeader}>
@@ -434,7 +436,7 @@ const styles = StyleSheet.create({
   submitBtn: { backgroundColor: '#4f46e5', padding: 15, borderRadius: 12, alignItems: 'center' },
   submitText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
 
-  // Modal Styles (Copied & Adapted)
+  // Modal Styles
   modalHeader: { padding: 15, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#eee' },
   modalTitle: { fontSize: 18, fontWeight: 'bold' },
   catScroll: { maxHeight: 50, marginVertical: 10, paddingHorizontal: 10 },

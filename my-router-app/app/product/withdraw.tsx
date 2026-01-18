@@ -93,6 +93,8 @@ export default function WithdrawScreen() {
     }, [])
   );
 
+// ... (Code ส่วนบนเหมือนเดิม) ...
+
   const fetchInitialData = async () => {
     try {
       setInitialLoading(true);
@@ -105,12 +107,15 @@ export default function WithdrawScreen() {
         `pagination[limit]=2000`
       ].join('&');
 
+      // ✅ แก้จุดที่ 1: เพิ่ม &sort=createdAt:desc ใน URL สินค้า
+      const productQuery = `populate=*&pagination[pageSize]=1000&sort=createdAt:desc`;
+
       const [resCats, resProds, resStocks, resUsers, resSites] = await Promise.all([
         fetch(`${API_URL}/categories`, { headers }),
-        fetch(`${API_URL}/products?populate=*&pagination[pageSize]=1000`, { headers }),
+        fetch(`${API_URL}/products?${productQuery}`, { headers }), // <--- แก้บรรทัดนี้
         fetch(`${API_URL}/stock-locations?${stockQuery}`, { headers }),
         fetch(`${API_URL}/users`, { headers }),
-        fetch(`${API_URL}/project-sites?filters[project_status][$eq]=active`, { headers }) // ✅ ดึง Site
+        fetch(`${API_URL}/project-sites?filters[project_status][$eq]=active`, { headers }) 
       ]);
 
       const jsonCats = await resCats.json();
@@ -135,7 +140,7 @@ export default function WithdrawScreen() {
       setProducts(mappedProducts);
       setActiveStocks(rawStocks);
       setUsers(rawUsers);
-      setSites(jsonSites.data || []); // ✅ Set Sites
+      setSites(jsonSites.data || []); 
 
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -144,6 +149,8 @@ export default function WithdrawScreen() {
       setInitialLoading(false);
     }
   };
+
+  // ... (Code ส่วนล่างเหมือนเดิม) ...
 
   const handleProductSelect = (product: Product) => {
     setTempSelectedProduct(product);

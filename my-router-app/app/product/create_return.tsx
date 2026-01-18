@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { API_URL } from '../../constants/Config';
 import { useAuth } from '../../contexts/AuthContext';
 
+// --- Interfaces ---
 interface Category { documentId: string; name: string; }
 interface Product { documentId: string; id: number; name: string; unit?: string; category?: Category; }
 interface CartItem { product: Product; qty: number; condition: string; }
@@ -50,7 +51,9 @@ export default function CreateReturnScreen() {
       
       const siteUrl = `${API_URL}/project-sites?filters[project_status][$eq]=active&pagination[pageSize]=100`;
       const catUrl = `${API_URL}/categories`;
-      const prodUrl = `${API_URL}/products?populate=*&pagination[pageSize]=1000`;
+      
+      // ✅ แก้จุดที่ 1: เพิ่ม &sort=createdAt:desc (ให้สินค้าใหม่ล่าสุดเด้งมาบนสุด)
+      const prodUrl = `${API_URL}/products?populate=*&pagination[pageSize]=1000&sort=createdAt:desc`;
 
       const [resSites, resCats, resProds] = await Promise.all([
         fetch(siteUrl, { headers }),
@@ -106,8 +109,10 @@ export default function CreateReturnScreen() {
           return_status: 'pending',
           project_site: selectedSite.documentId || selectedSite.id,
           note: note,
-          // ✅ 2. ส่ง ID ของ User ไปด้วย (เพื่อให้ Report รู้ว่าใครคืน)
           return_by: user?.id, 
+          
+          // ✅ แก้จุดที่ 2: เพิ่ม publishedAt: new Date() เพื่อแก้ปัญหาติด Draft
+          publishedAt: new Date(), 
           
           items: cart.map(item => ({
             product: item.product.documentId || item.product.id,

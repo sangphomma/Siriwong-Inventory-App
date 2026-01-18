@@ -33,7 +33,7 @@ interface Product {
     name: string;
     sku?: string;
     unit?: string;
-    min_stock?: number; // ✅ เพิ่ม field min_stock
+    min_stock?: number;
     category?: Category;
     // Fields ที่เราจะคำนวณแปะเพิ่มเข้าไป
     _calculated_total?: number;
@@ -73,49 +73,46 @@ export default function ManualSelectionReportScreen() {
       const headers = { 'Authorization': `Bearer ${token}` };
       
       const catUrl = `${API_URL}/categories`;
-      const prodUrl = `${API_URL}/products?populate=*&pagination[pageSize]=2000`;
-      const stockUrl = `${API_URL}/stock-locations?filters[on_hand_stock][$gt]=0&populate[location][fields][0]=name&populate[product][fields][0]=documentId&pagination[limit]=2000`;
 
-      const [resCats, resProds, resStocks] = await Promise.all([
+      // ✅ แก้ไข: เพิ่ม &sort=createdAt:desc เพื่อให้สินค้าใหม่ล่าสุดเด้งมาบนสุด
+      const prodUrl = `${API_URL}/products?populate=*&pagination[pageSize]=2000&sort=createdAt:desc`;
+      
+      const stockUrl = `${API_URL}/stock-locations?filters[on_hand_stock][$gt]=0&populate[location][fields][0]=name&populate[product][fields][0]=documentId&pagination[limit]=2000`;
+      const locUrl = `${API_URL}/locations`;
+
+      const [resCats, resProds, resStocks, resLocs] = await Promise.all([
         fetch(catUrl, { headers }),
         fetch(prodUrl, { headers }),
-        fetch(stockUrl, { headers })
+        fetch(stockUrl, { headers }),
+        fetch(locUrl, { headers })
       ]);
 
       const jsonCats = await resCats.json();
       const jsonProds = await resProds.json();
       const jsonStocks = await resStocks.json();
+      const jsonLocs = await resLocs.json();
 
       const rawProducts = jsonProds.data || [];
       const rawStocks = jsonStocks.data || [];
+      const rawLocs = jsonLocs.data || [];
 
-      // 1. Extract Unique Locations
-      const locMap = new Map<number, RealLocation>();
-      rawStocks.forEach((s: any) => {
-          if (s.location && s.location.id) {
-              locMap.set(s.location.id, s.location);
-          }
-      });
-      const uniqueLocs = Array.from(locMap.values()).sort((a,b) => a.name.localeCompare(b.name));
-      setLocations(uniqueLocs);
-
-      // 2. Map Products with Stock
+      // Map Stock to Product
       const mappedProducts = rawProducts.map((p: any) => {
           const myStocks = rawStocks.filter((s: any) => 
-            (s.product?.documentId === p.documentId) || (s.product?.id === p.id)
+              (s.product?.documentId === p.documentId) || (s.product?.id === p.id)
           );
+          const total = myStocks.reduce((sum: number, s: any) => sum + (s.on_hand_stock || 0), 0);
           
-          const totalStock = myStocks.reduce((sum: number, s: any) => sum + (s.on_hand_stock || 0), 0);
-          
-          return { 
-              ...p, 
-              _calculated_total: totalStock,
-              _stock_details: myStocks 
+          return {
+              ...p,
+              _calculated_total: total,
+              _stock_details: myStocks
           };
       });
 
       setCategories(jsonCats.data || []);
       setProducts(mappedProducts);
+      setLocations(rawLocs);
 
     } catch (error) {
       console.error("Fetch Error:", error);
@@ -191,12 +188,12 @@ export default function ManualSelectionReportScreen() {
             const currentStock = item._calculated_total || 0;
             const minStock = item.min_stock || 0;
             
-            // ✅ คำนวณยอดที่ต้องสั่งเพิ่ม
+            // คำนวณยอดที่ต้องสั่งเพิ่ม
             const needsRestock = currentStock < minStock;
             const orderAmount = needsRestock ? (minStock - currentStock) : 0;
             
             // Highlight สีแดงถ้าต้องสั่งเพิ่ม
-            const rowStyle = needsRestock ? 'color: #dc2626;' : ''; // สีแดงเข้ม
+            const rowStyle = needsRestock ? 'color: #dc2626;' : ''; 
             const orderCellStyle = needsRestock ? 'font-weight: bold; color: red;' : 'color: #ccc;';
 
             return `
@@ -298,7 +295,6 @@ export default function ManualSelectionReportScreen() {
         contentContainerStyle={{ padding: 15, paddingBottom: 120 }}
         ListEmptyComponent={renderEmptyState}
         renderItem={({ item, index }) => {
-            // คำนวณ Logic แสดงผลใน Card
             const currentStock = item._calculated_total || 0;
             const minStock = item.min_stock || 0;
             const needsRestock = currentStock < minStock;
@@ -315,12 +311,10 @@ export default function ManualSelectionReportScreen() {
 
                 <Text style={styles.cardTitle}>{item.name}</Text>
                 
-                {/* แถวแสดง Location */}
                 <Text style={{fontSize:12, color:'#64748b', marginBottom: 8}}>
                     📍 {getStockDetailString(item)}
                 </Text>
 
-                {/* แถวแสดงตัวเลข 3 ช่อง */}
                 <View style={styles.statsContainer}>
                     <View style={styles.statBox}>
                         <Text style={styles.statLabel}>คงเหลือ</Text>
@@ -348,7 +342,7 @@ export default function ManualSelectionReportScreen() {
         }}
       />
 
-      {/* --- Footer ปุ่มใหญ่ --- */}
+      {/* Footer */}
       {selectedItems.length > 0 && (
         <View style={styles.bigFooter}>
             <TouchableOpacity 
@@ -374,7 +368,7 @@ export default function ManualSelectionReportScreen() {
         </View>
       )}
 
-      {/* --- Search Modal --- */}
+      {/* Search Modal */}
       <Modal visible={isModalVisible} animationType="slide">
         <SafeAreaView style={{flex:1, backgroundColor: 'white'}}>
             <View style={styles.modalHeader}>
@@ -426,7 +420,6 @@ export default function ManualSelectionReportScreen() {
                     contentContainerStyle={{padding:15}}
                     renderItem={({ item }) => {
                         const displayStock = getStockInSelectedLocation(item) || 0;
-                        // เพิ่มการแสดงสถานะ Low Stock ใน Modal ด้วย
                         const isLow = (item._calculated_total || 0) < (item.min_stock || 0);
 
                         return (
@@ -465,48 +458,22 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, paddingTop: 50, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1e293b' },
-  
-  // Card List (ปรับใหม่ให้มีช่อง Stats)
   card: { backgroundColor: 'white', padding: 16, borderRadius: 16, marginBottom: 12, elevation: 2, shadowColor:'#000', shadowOpacity:0.05 },
   cardIndex: { fontSize: 12, color: '#94a3b8', fontWeight:'bold' },
   cardTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', marginTop: 4, marginBottom: 8 },
-  
   statsContainer: { flexDirection: 'row', backgroundColor: '#f8fafc', borderRadius: 10, padding: 10, marginTop: 5 },
   statBox: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   statLabel: { fontSize: 10, color: '#64748b', marginBottom: 2 },
   statValue: { fontSize: 16, fontWeight: 'bold' },
-
-  // Empty State
   emptyContainer: { alignItems: 'center', justifyContent: 'center', padding: 20, marginTop: 60 },
   emptyIconCircle: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#eff6ff', justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
   emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#1e293b', marginBottom: 5 },
   emptySubtitle: { fontSize: 14, color: '#64748b', textAlign: 'center', marginBottom: 30 },
-  bigCenterButton: { 
-    flexDirection: 'row', backgroundColor: '#ec4899', 
-    paddingVertical: 15, paddingHorizontal: 30, borderRadius: 30, 
-    alignItems: 'center', elevation: 5, shadowColor: '#ec4899', shadowOpacity: 0.3 
-  },
+  bigCenterButton: { flexDirection: 'row', backgroundColor: '#ec4899', paddingVertical: 15, paddingHorizontal: 30, borderRadius: 30, alignItems: 'center', elevation: 5, shadowColor: '#ec4899', shadowOpacity: 0.3 },
   bigCenterButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
-
-  // Footer
-  bigFooter: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: 'white',
-    flexDirection: 'row',
-    paddingHorizontal: 15,
-    paddingTop: 15,
-    paddingBottom: Platform.OS === 'android' ? 30 : 20, 
-    borderTopWidth: 1, borderTopColor: '#e2e8f0',
-    elevation: 10, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5
-  },
-  bigFooterBtn: {
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
-    height: 55, 
-    borderRadius: 12,
-  },
+  bigFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'white', flexDirection: 'row', paddingHorizontal: 15, paddingTop: 15, paddingBottom: Platform.OS === 'android' ? 30 : 20, borderTopWidth: 1, borderTopColor: '#e2e8f0', elevation: 10, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5 },
+  bigFooterBtn: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', height: 55, borderRadius: 12 },
   bigFooterText: { color: 'white', fontSize: 16, fontWeight: 'bold', marginLeft: 8 },
-
-  // Modal & Search
   modalHeader: { padding: 15, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#eee' },
   modalTitle: { fontSize: 18, fontWeight: 'bold' },
   filterScroll: { maxHeight: 45, marginVertical: 5, paddingHorizontal: 10 },
@@ -520,8 +487,6 @@ const styles = StyleSheet.create({
   input: { flex: 1, padding: 10, fontSize: 16 },
   searchItem: { flexDirection: 'row', padding: 15, borderBottomWidth: 1, borderColor: '#f1f5f9', alignItems: 'center' },
   searchName: { fontSize: 15, fontWeight: '500', color: '#333' },
-  
-  // Badge ใหม่สำหรับสินค้าใกล้หมดใน Modal
   lowStockBadge: { backgroundColor: '#fee2e2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 },
   lowStockText: { color: '#dc2626', fontSize: 10, fontWeight: 'bold' }
 });
