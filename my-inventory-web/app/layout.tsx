@@ -12,7 +12,6 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// 👇 แก้ไขข้อมูล Metadata ตรงนี้ครับ
 export const metadata: Metadata = {
   title: "Siriwong Inventory Portal",
   description: "Web Portal for Siriwong Inventory System & Documentation",
@@ -24,7 +23,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="th"> {/* เปลี่ยนเป็น th เพื่อให้ Browser รู้ว่าเป็นเว็บไทย */}
+    /* แก้ไข: ลบ Comment หลัง tag html ออก เพื่อป้องกัน Hydration Error */
+    <html lang="th">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-slate-50`}
       >
