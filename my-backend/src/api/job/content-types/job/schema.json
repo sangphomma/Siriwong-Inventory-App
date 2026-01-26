@@ -11,7 +11,7 @@
   },
   "pluginOptions": {},
   "attributes": {
-    "name": {
+    "title": {
       "type": "string"
     },
     "progress": {
@@ -28,6 +28,9 @@
       "relation": "oneToMany",
       "target": "api::job-task.job-task",
       "mappedBy": "job"
+    },
+    "Description": {
+      "type": "text"
     }
   }
 }

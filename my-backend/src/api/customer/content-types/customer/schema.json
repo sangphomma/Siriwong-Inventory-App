@@ -1,0 +1,33 @@
+{
+  "kind": "collectionType",
+  "collectionName": "customers",
+  "info": {
+    "singularName": "customer",
+    "pluralName": "customers",
+    "displayName": "Customer"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "lineID": {
+      "type": "string"
+    },
+    "address": {
+      "type": "text"
+    },
+    "project_sites": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::project-site.project-site",
+      "mappedBy": "customer"
+    }
+  }
+}

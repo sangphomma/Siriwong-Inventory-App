@@ -52,6 +52,33 @@
       "relation": "oneToMany",
       "target": "api::job.job",
       "mappedBy": "project_site"
+    },
+    "customer": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::customer.customer",
+      "inversedBy": "project_sites"
+    },
+    "checkin_GPS": {
+      "type": "json"
+    },
+    "daily_reports": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::daily-report.daily-report",
+      "mappedBy": "project_site"
+    },
+    "checklists": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::checklist.checklist",
+      "mappedBy": "project_site"
+    },
+    "team_members": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::users-permissions.user",
+      "mappedBy": "project_sites"
     }
   }
 }

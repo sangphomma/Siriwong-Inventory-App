@@ -1,0 +1,45 @@
+{
+  "kind": "collectionType",
+  "collectionName": "task_logs",
+  "info": {
+    "singularName": "task-log",
+    "pluralName": "task-logs",
+    "displayName": "TaskLog"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "job_task": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::job-task.job-task",
+      "inversedBy": "task_logs"
+    },
+    "Log_Type": {
+      "type": "enumeration",
+      "enum": [
+        "Progress",
+        "Defect",
+        "Photo"
+      ]
+    },
+    "Media": {
+      "type": "media",
+      "multiple": true,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    },
+    "Value": {
+      "type": "integer"
+    },
+    "Description": {
+      "type": "text"
+    }
+  }
+}

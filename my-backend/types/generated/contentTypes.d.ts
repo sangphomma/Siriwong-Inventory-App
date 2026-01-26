@@ -460,6 +460,116 @@ export interface ApiCategoryCategory extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiChecklistChecklist extends Struct.CollectionTypeSchema {
+  collectionName: 'checklists';
+  info: {
+    displayName: 'Checklist';
+    pluralName: 'checklists';
+    singularName: 'checklist';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    job_status: Schema.Attribute.Enumeration<['Pending', 'Pass', 'Fail']>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::checklist.checklist'
+    > &
+      Schema.Attribute.Private;
+    project_site: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::project-site.project-site'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    topic: Schema.Attribute.String;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiCustomerCustomer extends Struct.CollectionTypeSchema {
+  collectionName: 'customers';
+  info: {
+    displayName: 'Customer';
+    pluralName: 'customers';
+    singularName: 'customer';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    address: Schema.Attribute.Text;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    lineID: Schema.Attribute.String;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::customer.customer'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String;
+    phone: Schema.Attribute.String;
+    project_sites: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::project-site.project-site'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiDailyReportDailyReport extends Struct.CollectionTypeSchema {
+  collectionName: 'daily_reports';
+  info: {
+    displayName: 'DailyReport';
+    pluralName: 'daily-reports';
+    singularName: 'daily-report';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::daily-report.daily-report'
+    > &
+      Schema.Attribute.Private;
+    photos: Schema.Attribute.Media<
+      'images' | 'files' | 'videos' | 'audios',
+      true
+    >;
+    problem_note: Schema.Attribute.Text;
+    project_site: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::project-site.project-site'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    report_date: Schema.Attribute.Date;
+    title: Schema.Attribute.String;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    work_description: Schema.Attribute.Text;
+    work_status: Schema.Attribute.Enumeration<
+      ['Normal', 'Caution', 'Problem', 'Done']
+    >;
+  };
+}
+
 export interface ApiJobTaskJobTask extends Struct.CollectionTypeSchema {
   collectionName: 'job_tasks';
   info: {
@@ -471,9 +581,11 @@ export interface ApiJobTaskJobTask extends Struct.CollectionTypeSchema {
     draftAndPublish: true;
   };
   attributes: {
+    completed_quantity: Schema.Attribute.Decimal;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    description: Schema.Attribute.Text;
     evidence_image: Schema.Attribute.Media<'images' | 'files'>;
     job: Schema.Attribute.Relation<'manyToOne', 'api::job.job'>;
     job_status: Schema.Attribute.Enumeration<
@@ -485,8 +597,14 @@ export interface ApiJobTaskJobTask extends Struct.CollectionTypeSchema {
       'api::job-task.job-task'
     > &
       Schema.Attribute.Private;
+    progress: Schema.Attribute.Integer;
     publishedAt: Schema.Attribute.DateTime;
+    qc_photo: Schema.Attribute.Media<
+      'images' | 'files' | 'videos' | 'audios',
+      true
+    >;
     quantity: Schema.Attribute.Decimal;
+    task_logs: Schema.Attribute.Relation<'oneToMany', 'api::task-log.task-log'>;
     task_name: Schema.Attribute.String;
     unit: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;
@@ -509,17 +627,18 @@ export interface ApiJobJob extends Struct.CollectionTypeSchema {
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    Description: Schema.Attribute.Text;
     job_tasks: Schema.Attribute.Relation<'oneToMany', 'api::job-task.job-task'>;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<'oneToMany', 'api::job.job'> &
       Schema.Attribute.Private;
-    name: Schema.Attribute.String;
     progress: Schema.Attribute.Integer;
     project_site: Schema.Attribute.Relation<
       'manyToOne',
       'api::project-site.project-site'
     >;
     publishedAt: Schema.Attribute.DateTime;
+    title: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -690,10 +809,20 @@ export interface ApiProjectSiteProjectSite extends Struct.CollectionTypeSchema {
     draftAndPublish: true;
   };
   attributes: {
+    checkin_GPS: Schema.Attribute.JSON;
+    checklists: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::checklist.checklist'
+    >;
     coordinates: Schema.Attribute.String;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    customer: Schema.Attribute.Relation<'manyToOne', 'api::customer.customer'>;
+    daily_reports: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::daily-report.daily-report'
+    >;
     distance_from_branch: Schema.Attribute.String;
     jobs: Schema.Attribute.Relation<'oneToMany', 'api::job.job'>;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
@@ -713,6 +842,10 @@ export interface ApiProjectSiteProjectSite extends Struct.CollectionTypeSchema {
     return_requests: Schema.Attribute.Relation<
       'oneToMany',
       'api::return-request.return-request'
+    >;
+    team_members: Schema.Attribute.Relation<
+      'manyToMany',
+      'plugin::users-permissions.user'
     >;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
@@ -824,6 +957,41 @@ export interface ApiTagTag extends Struct.CollectionTypeSchema {
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+  };
+}
+
+export interface ApiTaskLogTaskLog extends Struct.CollectionTypeSchema {
+  collectionName: 'task_logs';
+  info: {
+    displayName: 'TaskLog';
+    pluralName: 'task-logs';
+    singularName: 'task-log';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    Description: Schema.Attribute.Text;
+    job_task: Schema.Attribute.Relation<'manyToOne', 'api::job-task.job-task'>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::task-log.task-log'
+    > &
+      Schema.Attribute.Private;
+    Log_Type: Schema.Attribute.Enumeration<['Progress', 'Defect', 'Photo']>;
+    Media: Schema.Attribute.Media<
+      'images' | 'files' | 'videos' | 'audios',
+      true
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    Value: Schema.Attribute.Integer;
   };
 }
 
@@ -1454,6 +1622,10 @@ export interface PluginUsersPermissionsUser
         minLength: 6;
       }>;
     position: Schema.Attribute.String;
+    project_sites: Schema.Attribute.Relation<
+      'manyToMany',
+      'api::project-site.project-site'
+    >;
     provider: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
     resetPasswordToken: Schema.Attribute.String & Schema.Attribute.Private;
@@ -1497,6 +1669,9 @@ declare module '@strapi/strapi' {
       'admin::transfer-token-permission': AdminTransferTokenPermission;
       'admin::user': AdminUser;
       'api::category.category': ApiCategoryCategory;
+      'api::checklist.checklist': ApiChecklistChecklist;
+      'api::customer.customer': ApiCustomerCustomer;
+      'api::daily-report.daily-report': ApiDailyReportDailyReport;
       'api::job-task.job-task': ApiJobTaskJobTask;
       'api::job.job': ApiJobJob;
       'api::location.location': ApiLocationLocation;
@@ -1507,6 +1682,7 @@ declare module '@strapi/strapi' {
       'api::return-request.return-request': ApiReturnRequestReturnRequest;
       'api::stock-location.stock-location': ApiStockLocationStockLocation;
       'api::tag.tag': ApiTagTag;
+      'api::task-log.task-log': ApiTaskLogTaskLog;
       'api::transaction.transaction': ApiTransactionTransaction;
       'api::withdrawal-item.withdrawal-item': ApiWithdrawalItemWithdrawalItem;
       'api::withdrawal-order.withdrawal-order': ApiWithdrawalOrderWithdrawalOrder;

@@ -1,0 +1,32 @@
+{
+  "kind": "collectionType",
+  "collectionName": "checklists",
+  "info": {
+    "singularName": "checklist",
+    "pluralName": "checklists",
+    "displayName": "Checklist"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "topic": {
+      "type": "string"
+    },
+    "job_status": {
+      "type": "enumeration",
+      "enum": [
+        "Pending",
+        "Pass",
+        "Fail"
+      ]
+    },
+    "project_site": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project-site.project-site",
+      "inversedBy": "checklists"
+    }
+  }
+}

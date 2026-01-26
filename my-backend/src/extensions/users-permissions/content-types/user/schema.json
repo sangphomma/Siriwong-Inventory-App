@@ -94,6 +94,12 @@
     },
     "position": {
       "type": "string"
+    },
+    "project_sites": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::project-site.project-site",
+      "inversedBy": "team_members"
     }
   }
 }

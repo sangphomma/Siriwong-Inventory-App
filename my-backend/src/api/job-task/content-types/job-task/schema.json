@@ -41,6 +41,31 @@
         "images",
         "files"
       ]
+    },
+    "description": {
+      "type": "text"
+    },
+    "progress": {
+      "type": "integer"
+    },
+    "qc_photo": {
+      "type": "media",
+      "multiple": true,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    },
+    "completed_quantity": {
+      "type": "decimal"
+    },
+    "task_logs": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::task-log.task-log",
+      "mappedBy": "job_task"
     }
   }
 }
