@@ -40,6 +40,12 @@
     },
     "Description": {
       "type": "text"
+    },
+    "progress_percentage": {
+      "type": "integer"
+    },
+    "problems_found": {
+      "type": "text"
     }
   }
 }

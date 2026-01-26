@@ -51,7 +51,8 @@ export default function HomePage() {
         
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-            🏗️ โครงการปัจจุบัน ({projects.length})
+          {/* ใช้ ?. เพื่อบอกว่า "ถ้ามีของค่อยนับ ถ้าไม่มีให้เป็น 0" */}
+🏗️ โครงการปัจจุบัน ({projects?.length || 0})
           </h2>
           <Link 
             href="/manage/project" 
