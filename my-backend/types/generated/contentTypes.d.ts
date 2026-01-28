@@ -824,6 +824,7 @@ export interface ApiProjectSiteProjectSite extends Struct.CollectionTypeSchema {
       'api::daily-report.daily-report'
     >;
     distance_from_branch: Schema.Attribute.String;
+    end_date: Schema.Attribute.Date;
     jobs: Schema.Attribute.Relation<'oneToMany', 'api::job.job'>;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
@@ -843,6 +844,7 @@ export interface ApiProjectSiteProjectSite extends Struct.CollectionTypeSchema {
       'oneToMany',
       'api::return-request.return-request'
     >;
+    start_date: Schema.Attribute.Date;
     team_members: Schema.Attribute.Relation<
       'manyToMany',
       'plugin::users-permissions.user'

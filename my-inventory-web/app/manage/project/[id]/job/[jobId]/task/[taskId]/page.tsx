@@ -78,7 +78,7 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
     if (!confirm("ต้องการลบบันทึกนี้ใช่หรือไม่?")) return;
     try {
       setLoading(true);
-      await deleteTaskLog(logId);
+      await deleteTaskLog(logId, task.documentId);
       await loadData();
     } catch (error) {
       alert("ลบไม่สำเร็จ");
@@ -135,7 +135,7 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
 
   if (loading && !task) return <div className="p-10 text-center text-slate-400">Loading...</div>;
 
-  const currentProgress = task?.task_logs?.[0]?.progress_percentage || 0;
+  const currentProgress = task?.progress ?? task?.task_logs?.[0]?.progress_percentage ?? 0;
 
   return (
     <div className="min-h-screen bg-slate-50 pb-40 font-sans relative">
