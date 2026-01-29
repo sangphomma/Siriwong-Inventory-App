@@ -8,9 +8,9 @@ import {
   deleteJobTask, 
   updateJobTask, 
   createJobTask, 
-  updateJob, 
-  STRAPI_URL 
+  updateJob
 } from "@/services/api"; 
+import { STRAPI_URL } from "@/services/config";
 import { useRouter } from "next/navigation";
 
 export default function JobDetailPage({ params }: { params: Promise<{ id: string, jobId: string }> }) {

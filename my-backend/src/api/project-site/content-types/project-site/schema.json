@@ -85,6 +85,12 @@
     },
     "end_date": {
       "type": "date"
+    },
+    "creator": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "inversedBy": "created_projects"
     }
   }
 }

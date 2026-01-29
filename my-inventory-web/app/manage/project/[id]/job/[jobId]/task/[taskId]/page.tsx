@@ -2,7 +2,8 @@
 
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { fetchTaskWithLogs, createTaskLog, updateTaskLog, deleteTaskLog, STRAPI_URL } from "@/services/api";
+import { fetchTaskWithLogs, createTaskLog, updateTaskLog, deleteTaskLog } from "@/services/api";
+import { STRAPI_URL } from "@/services/config";
 import { resizeImage } from "@/utils/imageResizer"; 
 import { useRouter } from "next/navigation";
 

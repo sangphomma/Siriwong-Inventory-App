@@ -818,6 +818,10 @@ export interface ApiProjectSiteProjectSite extends Struct.CollectionTypeSchema {
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    creator: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
     customer: Schema.Attribute.Relation<'manyToOne', 'api::customer.customer'>;
     daily_reports: Schema.Attribute.Relation<
       'oneToMany',
@@ -1609,6 +1613,10 @@ export interface PluginUsersPermissionsUser
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    created_projects: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::project-site.project-site'
+    >;
     email: Schema.Attribute.Email &
       Schema.Attribute.Required &
       Schema.Attribute.SetMinMaxLength<{

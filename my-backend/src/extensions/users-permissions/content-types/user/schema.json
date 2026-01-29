@@ -100,6 +100,12 @@
       "relation": "manyToMany",
       "target": "api::project-site.project-site",
       "inversedBy": "team_members"
+    },
+    "created_projects": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::project-site.project-site",
+      "mappedBy": "creator"
     }
   }
 }
