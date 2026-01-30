@@ -1,0 +1,39 @@
+{
+  "kind": "collectionType",
+  "collectionName": "project_members",
+  "info": {
+    "singularName": "project-member",
+    "pluralName": "project-members",
+    "displayName": "ProjectMember"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "inversedBy": "project_members"
+    },
+    "project_site": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project-site.project-site",
+      "inversedBy": "project_members"
+    },
+    "role_in_project": {
+      "type": "string"
+    },
+    "responsibility": {
+      "type": "text"
+    },
+    "start_date": {
+      "type": "date"
+    },
+    "end_date": {
+      "type": "date"
+    }
+  }
+}

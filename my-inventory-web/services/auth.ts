@@ -1,11 +1,11 @@
 // services/auth.ts
 import axios from 'axios';
-import Cookies from 'js-cookie'; // ต้อง npm install js-cookie @types/js-cookie
+import Cookies from 'js-cookie'; 
 import { STRAPI_URL } from './config';
 
 const AUTH_URL = `${STRAPI_URL}/api/auth`;
+const API_URL = `${STRAPI_URL}/api`; // ✅ เพิ่มบรรทัดนี้เพื่อใช้ดึงข้อมูล User
 
-// Type ของ User ที่เราจะใช้ใน App
 export interface User {
   id: number;
   username: string;
@@ -24,23 +24,36 @@ interface LoginResponse {
   user: User;
 }
 
-// 1. ฟังก์ชัน Login
+// 1. ฟังก์ชัน Login (ฉบับอัปเกรด: ดึง Role ชัวร์ 100%)
 export const login = async (identifier: string, password: string): Promise<LoginResponse> => {
   try {
+    // Step 1: ยิง Login เพื่อขอ Token
     const response = await axios.post(`${AUTH_URL}/local`, {
       identifier,
       password,
     });
     
-    const { jwt, user } = response.data;
-    
-    // Set Token & User ลง Cookie (หมดอายุใน 7 วัน)
-    // หมายเหตุ: การเก็บ User object ลง Cookie ทำให้ Middleware อ่านค่าได้ง่าย แต่ต้องระวังขนาดไฟล์
-    Cookies.set('token', jwt, { expires: 7 });
-    Cookies.set('user', JSON.stringify(user), { expires: 7 });
+    const { jwt } = response.data;
 
-    return response.data;
+    // Step 2: ✅ ใช้ Token ที่ได้ ยิงไปขอข้อมูล User + Role อีกรอบ (Force Populate)
+    // เพราะ response จาก Login ปกติมักจะไม่ส่ง role.name มาให้
+    const meResponse = await axios.get(`${API_URL}/users/me?populate=role`, {
+        headers: {
+            Authorization: `Bearer ${jwt}`
+        }
+    });
+
+    const fullUser = meResponse.data;
+    
+    // Step 3: บันทึก Token และข้อมูล User ตัวเต็ม (ที่มี Role) ลง Cookie
+    Cookies.set('token', jwt, { expires: 7 });
+    Cookies.set('user', JSON.stringify(fullUser), { expires: 7 });
+
+    // คืนค่ากลับไป (เอา user ตัวใหม่ส่งกลับไป)
+    return { jwt, user: fullUser };
+
   } catch (error: any) {
+    console.error("Login Error:", error);
     throw error.response?.data?.error || error;
   }
 };
@@ -49,7 +62,6 @@ export const login = async (identifier: string, password: string): Promise<Login
 export const logout = () => {
   Cookies.remove('token');
   Cookies.remove('user');
-  // บังคับ Reload หน้าเว็บเพื่อให้ Context เคลียร์ค่า
   window.location.href = '/login'; 
 };
 

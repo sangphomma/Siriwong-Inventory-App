@@ -91,6 +91,12 @@
       "relation": "manyToOne",
       "target": "plugin::users-permissions.user",
       "inversedBy": "created_projects"
+    },
+    "project_members": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::project-member.project-member",
+      "mappedBy": "project_site"
     }
   }
 }

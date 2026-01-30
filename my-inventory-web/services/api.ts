@@ -31,6 +31,10 @@ apiClient.interceptors.request.use((config) => {
 // 🛠️ HELPER FUNCTIONS
 // ==========================================
 
+// services/api.ts
+
+// ... (ส่วน import ด้านบน)
+
 const normalizeStrapiData = (data: any): any => {
   if (!data || data._isNormalized) return data;
   const normalized: any = {
@@ -41,8 +45,16 @@ const normalizeStrapiData = (data: any): any => {
     _isNormalized: true
   };
   
-  // รายชื่อ field ที่เป็น Relation ต้อง normalize ซ้ำลงไป
-  const relations = ['jobs', 'job_tasks', 'task_logs', 'Media', 'creator', 'team_members'];
+  // ✅ แก้ไขบรรทัดนี้: เพิ่ม 'user' เข้าไปในรายการ
+  const relations = [
+      'jobs', 
+      'job_tasks', 
+      'task_logs', 
+      'Media', 
+      'creator', 
+      'team_members', 
+      'user' // 👈 เพิ่มตัวนี้ครับ!
+  ];
   
   relations.forEach(key => {
     const target = data[key] || (data.attributes && data.attributes[key]);
@@ -54,6 +66,8 @@ const normalizeStrapiData = (data: any): any => {
   });
   return normalized;
 };
+
+// ... (ส่วนอื่นเหมือนเดิม)
 
 // ✅ เพิ่มฟังก์ชันดึงรายชื่อ User ทั้งหมด
 export const getAllUsers = async () => {
@@ -377,4 +391,128 @@ export const deleteTaskLog = async (logDocumentId: string, jobTaskDocId: string)
   if (jobTaskDocId) {
       await recalculateTaskProgress(jobTaskDocId);
   }
+};
+
+// ... (โค้ดเดิม)
+
+// ==========================================
+// 👤 USER MANAGEMENT (Admin Only)
+// ==========================================
+// services/api.ts
+
+// ... (โค้ดอื่นๆ)
+
+// ✅ เพิ่มฟังก์ชันสำหรับดึง Default Role (Authenticated)
+export const getDefaultRole = async () => {
+  try {
+    const response = await apiClient.get('/users-permissions/roles');
+    const roles = response.data.roles;
+    
+    // หา Role ที่ชื่อ 'Authenticated' (เป็น Default ของ User ทั่วไป)
+    // หรือจะหาจาก type: 'authenticated' ก็ได้ (แม่นยำกว่า)
+    const authRole = roles.find((r: any) => r.type === 'authenticated');
+    
+    return authRole ? authRole.id : null;
+  } catch (error) {
+    console.error("Error fetching roles:", error);
+    return null;
+  }
+};
+// สร้าง User ใหม่ (ปกติ Strapi ใช้ /auth/local/register แต่ถ้า Admin สร้างให้ใช้ /users ได้ถ้าเปิดสิทธิ์)
+export const createUser = async (userData: any) => {
+  return await apiClient.post('/users', userData);
+};
+
+// แก้ไขข้อมูล User
+export const updateUser = async (userId: string | number, userData: any) => {
+  return await apiClient.put(`/users/${userId}`, userData);
+};
+
+// ลบ User
+export const deleteUser = async (userId: string | number) => {
+  return await apiClient.delete(`/users/${userId}`);
+};
+
+// ดึง Role ทั้งหมด (เพื่อเอามาใส่ Dropdown ตอนสร้าง User ว่าจะเป็น Admin หรือ User ธรรมดา)
+export const getRoles = async () => {
+    const response = await apiClient.get('/users-permissions/roles');
+    return response.data.roles; 
+};
+
+// services/api.ts (ส่วนต่อท้าย)
+
+// ==========================================
+// 👷 PROJECT MEMBERS (ทีมงานในโปรเจกต์)
+// ==========================================
+
+// ดึงรายชื่อทีมงานทั้งหมดในโปรเจกต์นี้
+// services/api.ts
+
+export const getProjectMembers = async (projectDocId: string) => {
+  const query = {
+    filters: {
+      project_site: {
+        documentId: {
+          $eq: projectDocId
+        }
+      }
+    },
+    populate: {
+      user: {
+        fields: ['username', 'email', 'position'], // ✅ ดึงเฉพาะข้อความ
+        populate: {
+            avatar: true // ✅ ดึงรูป avatar แยกออกมา
+        }
+      }
+    },
+    sort: ['start_date:desc']
+  };
+
+  const response = await apiClient.get('/project-members', {
+    params: query,
+    paramsSerializer: (params) => qs.stringify(params, { encodeValuesOnly: true }),
+  });
+
+  // ✅ แก้ไขตรงนี้: บังคับแกะข้อมูล User เอง
+  const members = response.data.data.map(normalizeStrapiData);
+  return members.map((m: any) => {
+      // เช็คว่า user ยังติดอยู่ในกล่อง data หรือไม่? ถ้าใช่ ให้แกะออก
+      if (m.user && m.user.data) {
+          m.user = normalizeStrapiData(m.user.data);
+      }
+      return m;
+  });
+};
+
+// เพิ่มทีมงานเข้าโปรเจกต์
+export const addProjectMember = async (data: any) => {
+  // data ต้องมี: projectSiteId, userId, role, responsibility, start_date, end_date
+  return await apiClient.post('/project-members', {
+    data: {
+      project_site: data.projectSiteId, // ✅ ผูกกับ Project (Relation)
+      user: data.userId,                // ✅ ผูกกับ User (Relation)
+      role_in_project: data.role,
+      responsibility: data.responsibility,
+      start_date: data.start_date,
+      end_date: data.end_date || null
+    }
+  });
+};
+
+// ลบทีมงานออกจากโปรเจกต์ (ลบประวัติ)
+export const deleteProjectMember = async (documentId: string) => {
+  return await apiClient.delete(`/project-members/${documentId}`);
+};
+
+// แก้ไขข้อมูลสมาชิกในทีม (Role, Date, Responsibility)
+export const updateProjectMember = async (documentId: string, data: any) => {
+  return await apiClient.put(`/project-members/${documentId}`, {
+    data: {
+      // เรามักจะไม่แก้ User หรือ Project Site (เพราะเป็น Relation หลัก) แก้แค่รายละเอียดงาน
+      role_in_project: data.role,
+      responsibility: data.responsibility,
+      start_date: data.start_date,
+      end_date: data.end_date || null
+    }
+  });
 };

@@ -798,6 +798,46 @@ export interface ApiProductProduct extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiProjectMemberProjectMember
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'project_members';
+  info: {
+    displayName: 'ProjectMember';
+    pluralName: 'project-members';
+    singularName: 'project-member';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    end_date: Schema.Attribute.Date;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::project-member.project-member'
+    > &
+      Schema.Attribute.Private;
+    project_site: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::project-site.project-site'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    responsibility: Schema.Attribute.Text;
+    role_in_project: Schema.Attribute.String;
+    start_date: Schema.Attribute.Date;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    user: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+  };
+}
+
 export interface ApiProjectSiteProjectSite extends Struct.CollectionTypeSchema {
   collectionName: 'project_sites';
   info: {
@@ -839,6 +879,10 @@ export interface ApiProjectSiteProjectSite extends Struct.CollectionTypeSchema {
     location: Schema.Attribute.Text;
     name: Schema.Attribute.String;
     overall_progress: Schema.Attribute.Integer;
+    project_members: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::project-member.project-member'
+    >;
     project_status: Schema.Attribute.Enumeration<
       ['active', 'closed', 'pending']
     > &
@@ -1634,6 +1678,10 @@ export interface PluginUsersPermissionsUser
         minLength: 6;
       }>;
     position: Schema.Attribute.String;
+    project_members: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::project-member.project-member'
+    >;
     project_sites: Schema.Attribute.Relation<
       'manyToMany',
       'api::project-site.project-site'
@@ -1690,6 +1738,7 @@ declare module '@strapi/strapi' {
       'api::petty-cash.petty-cash': ApiPettyCashPettyCash;
       'api::position.position': ApiPositionPosition;
       'api::product.product': ApiProductProduct;
+      'api::project-member.project-member': ApiProjectMemberProjectMember;
       'api::project-site.project-site': ApiProjectSiteProjectSite;
       'api::return-request.return-request': ApiReturnRequestReturnRequest;
       'api::stock-location.stock-location': ApiStockLocationStockLocation;
