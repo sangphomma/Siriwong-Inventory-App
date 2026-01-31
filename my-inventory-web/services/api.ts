@@ -284,7 +284,7 @@ const recalculateTaskProgress = async (jobTaskDocId: string) => {
     const query = {
       populate: {
         task_logs: {
-          fields: ['progress_percentage'] 
+          fields: ['progress_percentage', 'Log_Type'] // 👈 ดึง Log_Type มาด้วย
         }
       }
     };
@@ -296,17 +296,29 @@ const recalculateTaskProgress = async (jobTaskDocId: string) => {
     const taskData = normalizeStrapiData(response.data.data);
     const logs = taskData.task_logs || [];
 
+    // 🎯 LOGIC ใหม่: กรองเฉพาะ Type 'Progress'
+    const progressLogs = logs.filter((l: any) => l.Log_Type === 'Progress');
+
     let newProgress = 0;
-    if (logs.length > 0) {
-      const total = logs.reduce((sum: number, log: any) => sum + (log.progress_percentage || 0), 0);
-      newProgress = Math.round(total / logs.length);
-    }
+    
+    if (progressLogs.length > 0) {
+      // ✅ (Option A) เปิดใช้ส่วนนี้: ใช้ค่าล่าสุด (Latest Value)
+      // เรียงลำดับเวลาจาก "ใหม่ -> เก่า"
+      progressLogs.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      // หยิบตัวแรก (ตัวใหม่สุด) มาใช้เลย
+      newProgress = progressLogs[0].progress_percentage;
+
+      // ❌ (Option B) ปิดส่วนนี้ไป: ไม่ใช้ค่าเฉลี่ยแล้ว
+      // const total = progressLogs.reduce((sum: number, log: any) => sum + (log.progress_percentage || 0), 0);
+      // newProgress = Math.round(total / progressLogs.length);
+} else {
+    newProgress = taskData.progress || 0; 
+}
 
     await apiClient.put(`/job-tasks/${jobTaskDocId}`, {
       data: { progress: newProgress }
     });
 
-    console.log(`🔄 Recalculated Task Progress: ${newProgress}% (from ${logs.length} logs)`);
     return newProgress;
 
   } catch (error) {
@@ -316,12 +328,14 @@ const recalculateTaskProgress = async (jobTaskDocId: string) => {
 
 export const createTaskLog = async (jobTaskDocId: string, data: any) => {
   try {
+    // ... (ส่วน upload รูปเหมือนเดิม) ...
     let mediaIds: any[] = [];
     if (data.photos && data.photos.length > 0) {
-      const uploadPromises = data.photos.map(async (file: File) => {
+      // ... (Code Upload รูปเดิม) ...
+       const uploadPromises = data.photos.map(async (file: File) => {
         const formData = new FormData();
         formData.append('files', file); 
-        const uploadRes = await apiClient.post('/upload', formData); // ใช้ apiClient แทน axios
+        const uploadRes = await apiClient.post('/upload', formData);
         return uploadRes.data[0];
       });
       const uploadedFiles = await Promise.all(uploadPromises);
@@ -331,18 +345,19 @@ export const createTaskLog = async (jobTaskDocId: string, data: any) => {
     const payload = {
       data: {
         Description: String(data.description || ""), 
-        Log_Type: "Progress",
+        Log_Type: data.logType || "Info", // 👈 รับค่า Type จาก Frontend
         job_task: jobTaskDocId,
         Media: mediaIds,
-        progress_percentage: Number(data.progress || 0), 
+        // ถ้าไม่ใช่ Progress ให้ส่ง 0 หรือ null ไป (เพื่อไม่ให้กวน Data)
+        progress_percentage: data.logType === 'Progress' ? Number(data.progress || 0) : 0, 
         problems_found: data.problems || "" 
       }
     };
 
     const response = await apiClient.post('/task-logs', payload);
-
-    // Sync กลับแม่
-    await recalculateTaskProgress(jobTaskDocId);
+    
+    // Sync เฉพาะถ้าเป็น Progress (หรือจะ Sync ทุกครั้งเพื่อให้ชัวร์ก็ได้ครับ ผมแนะนำ Sync ทุกครั้งเผื่ออนาคต)
+    await recalculateTaskProgress(jobTaskDocId); 
 
     return response.data;
   } catch (error: any) {
@@ -350,8 +365,10 @@ export const createTaskLog = async (jobTaskDocId: string, data: any) => {
   }
 };
 
+
+// ... (updateTaskLog ก็ทำคล้ายกัน เพิ่ม field Log_Type เข้าไปใน payload) ...
 export const updateTaskLog = async (logDocumentId: string, data: any, existingMediaIds: number[], jobTaskDocId: string) => {
-  try {
+    // ... (Code Upload รูปเดิม) ...
     let newMediaIds: any[] = [];
     if (data.photos && data.photos.length > 0) {
        const uploadPromises = data.photos.map(async (file: File) => {
@@ -365,11 +382,13 @@ export const updateTaskLog = async (logDocumentId: string, data: any, existingMe
     }
 
     const finalMediaIds = [...existingMediaIds, ...newMediaIds];
+    
     const payload = {
       data: {
-        Description: String(data.description || ""), 
+        Description: String(data.description || ""),
+        Log_Type: data.logType, // 👈 Update Type
         Media: finalMediaIds, 
-        progress_percentage: Number(data.progress || 0), 
+        progress_percentage: data.logType === 'Progress' ? Number(data.progress || 0) : 0, 
         problems_found: data.problems || "" 
       }
     };
@@ -381,9 +400,6 @@ export const updateTaskLog = async (logDocumentId: string, data: any, existingMe
     }
 
     return response.data;
-  } catch (error: any) {
-    throw error;
-  }
 };
 
 export const deleteTaskLog = async (logDocumentId: string, jobTaskDocId: string) => {
@@ -515,4 +531,65 @@ export const updateProjectMember = async (documentId: string, data: any) => {
       end_date: data.end_date || null
     }
   });
+};
+
+// services/api.ts (เพิ่มต่อท้ายไฟล์)
+
+// ... (โค้ดเดิม)
+
+// ✅ ฟังก์ชันใหม่: ดึง Log ของทั้งโปรเจกต์ แบบแบ่งหน้า (Infinite Scroll)
+export const fetchProjectLogs = async (projectDocId: string, page: number = 1, pageSize: number = 10) => {
+  try {
+    const query = {
+      filters: {
+        job_task: {
+          job: {
+            project_site: {
+              documentId: { $eq: projectDocId }
+            }
+          }
+        }
+      },
+      populate: {
+        Media: true,
+        job_task: {
+          fields: ['task_name'],
+          populate: {
+            job: {
+              fields: ['title', 'documentId']
+            }
+          }
+        }
+      },
+      sort: ['createdAt:desc'], // ใหม่สุดขึ้นก่อน
+      pagination: {
+        page: page,
+        pageSize: pageSize
+      }
+    };
+
+    const response = await apiClient.get('/task-logs', {
+      params: query,
+      paramsSerializer: (params) => qs.stringify(params, { encodeValuesOnly: true }),
+    });
+
+    const logs = response.data.data.map(normalizeStrapiData);
+    
+    // แปลงโครงสร้างให้แบนราบ เพื่อง่ายต่อการแสดงผลหน้าเว็บ
+    const flattenedLogs = logs.map((log: any) => ({
+      ...log,
+      taskName: log.job_task?.task_name || "Unknown Task",
+      jobTitle: log.job_task?.job?.title || "Unknown Job",
+      jobId: log.job_task?.job?.documentId,
+      taskId: log.job_task?.documentId
+    }));
+
+    return {
+      data: flattenedLogs,
+      meta: response.data.meta
+    };
+  } catch (error) {
+    console.error("Error fetching project logs:", error);
+    return { data: [], meta: null };
+  }
 };

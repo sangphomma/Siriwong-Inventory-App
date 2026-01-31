@@ -8,13 +8,18 @@ import {
   getAllUsers, createUser, updateUser, deleteUser , getDefaultRole
 } from "@/services/api"; 
 import { useAuth } from "../context/AuthContext";
-import { useRouter } from "next/navigation";
+// import { useRouter } from "next/navigation"; // ❌ ไม่ต้องใช้ Router redirect แล้ว
 
 const OFFICE_LAT = 13.879714702894447;
 const OFFICE_LNG = 100.63002504136652;
 
-// --- Icons Component (แยกออกมาให้โค้ดสะอาด) ---
+// --- Icons Component ---
 const Icons = {
+  Login: () => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l-3 3m0 0 3 3m-3-3h12.75" />
+    </svg>
+  ),
   Edit: () => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
       <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
@@ -44,7 +49,7 @@ const Icons = {
 
 export default function ManageProjectsPage() {
   const { user, logout, loading: authLoading } = useAuth();
-  const router = useRouter();
+  // const router = useRouter(); // ❌ ปิดการใช้งาน Router Push
 
   // --- State Projects ---
   const [projects, setProjects] = useState<any[]>([]);
@@ -59,8 +64,6 @@ export default function ManageProjectsPage() {
   const [isUserMgrOpen, setIsUserMgrOpen] = useState(false);
   const [userForm, setUserForm] = useState({ id: "", username: "", email: "", password: "", position: "" });
   const [isEditingUser, setIsEditingUser] = useState(false);
-  
-  // ✅ State ใหม่: เก็บรายชื่อตำแหน่งที่ไม่ซ้ำ (Unique Positions)
   const [uniquePositions, setUniquePositions] = useState<string[]>([]);
 
   // --- Form Project ---
@@ -69,45 +72,65 @@ export default function ManageProjectsPage() {
     ownerId: "" 
   });
 
+  // ✅ 1. เช็คสิทธิ์ Admin
   const isAdmin = user?.role?.name === 'Admin' || user?.role?.type === 'admin'; 
 
-  // Load Data
+  // Load Data (ปรับปรุงใหม่: Guest ก็โหลดได้)
   const loadData = async () => {
     try {
       setLoading(true);
-      const [projectsData, usersData] = await Promise.all([
-        getAllProjects(),
-        getAllUsers()
-      ]);
-      setProjects(projectsData);
-      setUsers(usersData);
       
-      // ✅ กรอง Position ที่ไม่ซ้ำ และไม่ใช่ค่าว่าง เพื่อทำ Suggestion List
-      const positions = Array.from(new Set(usersData.map((u: any) => u.position).filter((p: any) => p && p.trim() !== "")));
-      setUniquePositions(positions as string[]);
+      // ✅ 1. โหลด Projects เสมอ (Public Read)
+      const projectsData = await getAllProjects();
+      setProjects(projectsData);
+
+      // ✅ 2. โหลด Users เฉพาะตอน Login แล้วเท่านั้น (ป้องกัน Error 403)
+      if (user) {
+        try {
+            const usersData = await getAllUsers();
+            setUsers(usersData);
+            const positions = Array.from(new Set(usersData.map((u: any) => u.position).filter((p: any) => p && p.trim() !== "")));
+            setUniquePositions(positions as string[]);
+        } catch (err) {
+            console.log("Skipping user load: Not authorized");
+        }
+      }
 
     } catch (error) {
-      console.error(error);
+      console.error("Error loading data:", error);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => { 
-    if (!authLoading && !user) router.push("/login");
-    else if (user) loadData(); 
+    // ✅ แก้ไข: ไม่ Redirect แล้ว แค่โหลดข้อมูลเมื่อพร้อม
+    if (!authLoading) {
+        loadData();
+    }
   }, [user, authLoading]);
 
+  // ✅ Filter Projects: 
   useEffect(() => {
-    if (!user || projects.length === 0) return;
+    if (projects.length === 0) return;
+    
+    // ถ้าเป็น Guest (ไม่ Login) -> เห็นทั้งหมดแบบ Read-Only
+    if (!user) {
+        setFilteredProjects(projects);
+        return;
+    }
+
+    // ถ้า Login แล้ว
     if (isAdmin) setFilteredProjects(projects);
     else {
-        const myProjects = projects.filter(p => p.creator?.id === user.id);
-        setFilteredProjects(myProjects);
+        // ให้ User เห็นโปรเจคที่ตัวเองสร้าง (หรือจะปรับให้เห็นหมดก็ได้)
+        const myProjects = projects.filter(p => p.creator?.id === user.id); 
+        // setFilteredProjects(myProjects); 
+        setFilteredProjects(projects); // ตอนนี้ให้เห็นหมดไปก่อนตาม UI
     }
   }, [projects, user, isAdmin]);
 
-  // ... (ฟังก์ชัน GPS เดิม ละไว้) ...
+  // ... (ฟังก์ชัน GPS และ Helper Functions) ...
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371; const dLat = (lat2 - lat1) * (Math.PI / 180); const dLon = (lon2 - lon1) * (Math.PI / 180);
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
@@ -123,8 +146,6 @@ export default function ManageProjectsPage() {
         setGpsLoading(false);
     }, () => { alert("ดึงตำแหน่งไม่ได้"); setGpsLoading(false); });
   };
-  const openGoogleMapsPicker = () => window.open(`https://www.google.com/maps/search/?api=1&query=${OFFICE_LAT},${OFFICE_LNG}`, '_blank');
-  const openNavigateMap = (e: React.MouseEvent, coords: string) => { e.preventDefault(); e.stopPropagation(); if (coords) window.open(`https://www.google.com/maps/search/?api=1&query=${coords}`, '_blank'); };
 
   // --- Project Management Functions ---
   const resetProjectForm = () => {
@@ -160,38 +181,23 @@ export default function ManageProjectsPage() {
     setUserForm({ id: u.id, username: u.username, email: u.email, password: "", position: u.position || "" });
     setIsEditingUser(true);
   };
-const handleUserSubmit = async (e: React.FormEvent) => {
+  const handleUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
         if (isEditingUser) {
-            // ... (Logic แก้ไขเดิม) ...
             const payload: any = { username: userForm.username, email: userForm.email, position: userForm.position };
             if (userForm.password) payload.password = userForm.password;
             await updateUser(userForm.id, payload);
         } else {
-            // ✅ LOGIC สร้างใหม่ (แก้ไขตรงนี้)
-    if (!userForm.password) return alert("กรุณาตั้งรหัสผ่าน");
-    
-    // 1. ดึง Default Role ID มาก่อน
-    const defaultRoleId = await getDefaultRole();
-    if (!defaultRoleId) return alert("ไม่พบข้อมูล Role ในระบบ (กรุณาติดต่อ Admin)");
-
-    // 2. ✂️ ตัด id ออกจาก userForm ก่อนส่ง (Deconstruct)
-    // เพราะถ้าส่ง id: "" ไปด้วย Database จะ Error (datatype mismatch)
-    const { id, ...userData } = userForm; 
-
-    // 3. ส่งข้อมูลที่ไม่มี id ไปสร้าง
-    await createUser({ 
-        ...userData, 
-        confirmed: true, 
-        role: defaultRoleId
-            });
+            if (!userForm.password) return alert("กรุณาตั้งรหัสผ่าน");
+            const defaultRoleId = await getDefaultRole();
+            if (!defaultRoleId) return alert("ไม่พบข้อมูล Role ในระบบ (กรุณาติดต่อ Admin)");
+            const { id, ...userData } = userForm; 
+            await createUser({ ...userData, confirmed: true, role: defaultRoleId });
         }
-        resetUserForm(); 
-        loadData();
+        resetUserForm(); loadData();
     } catch (err: any) { 
         console.error(err); 
-        // แสดง Error ที่ชัดเจนขึ้น
         const errMsg = err.response?.data?.error?.message || err.message || "Unknown Error";
         alert("บันทึก User ไม่สำเร็จ: " + errMsg); 
     }
@@ -200,9 +206,6 @@ const handleUserSubmit = async (e: React.FormEvent) => {
     if(confirm("ต้องการลบ User นี้หรือไม่?")) { try { await deleteUser(id); loadData(); } catch (err) { alert("ลบไม่สำเร็จ"); } }
   };
 
-  // ==========================
-  // 🎨 RENDER UI
-  // ==========================
   if (authLoading || loading) return <div className="h-screen flex items-center justify-center text-slate-400 bg-slate-50">Loading...</div>;
 
   return (
@@ -215,19 +218,32 @@ const handleUserSubmit = async (e: React.FormEvent) => {
              <div>
                 <h1 className="text-2xl font-bold">Siriwong Portal 🏗️</h1>
                 <p className="text-slate-400 text-sm flex items-center gap-2">
-                    สวัสดี, <span className="text-white font-bold">{user?.username}</span> 
-                    {isAdmin && <span className="bg-amber-500 text-black text-[10px] px-2 py-0.5 rounded-full font-bold">ADMIN</span>}
+                    {user ? (
+                        <>สวัสดี, <span className="text-white font-bold">{user.username}</span> 
+                        {isAdmin && <span className="bg-amber-500 text-black text-[10px] px-2 py-0.5 rounded-full font-bold">ADMIN</span>}</>
+                    ) : (
+                        <>สวัสดี, <span className="text-white font-bold">ผู้เยี่ยมชม</span> (View Only)</>
+                    )}
                 </p>
              </div>
              <div className="flex gap-2">
-                 {isAdmin && (
-                     <button onClick={() => setIsUserMgrOpen(true)} className="bg-white/10 hover:bg-white/20 hover:scale-105 p-2 rounded-full transition text-white w-10 h-10 flex items-center justify-center shadow-lg backdrop-blur-sm" title="จัดการผู้ใช้งาน">
-                        <Icons.ManageUsers />
-                     </button>
+                 {user ? (
+                     <>
+                        {isAdmin && (
+                            <button onClick={() => setIsUserMgrOpen(true)} className="bg-white/10 hover:bg-white/20 hover:scale-105 p-2 rounded-full transition text-white w-10 h-10 flex items-center justify-center shadow-lg backdrop-blur-sm" title="จัดการผู้ใช้งาน">
+                                <Icons.ManageUsers />
+                            </button>
+                        )}
+                        <button onClick={logout} className="bg-red-500/20 hover:bg-red-500/40 hover:scale-105 text-red-200 p-2 rounded-full transition w-10 h-10 flex items-center justify-center backdrop-blur-sm" title="ออกจากระบบ">
+                            <Icons.Logout />
+                        </button>
+                     </>
+                 ) : (
+                     // ✅ ปุ่ม Login สำหรับ Guest
+                     <Link href="/login" className="bg-white/10 hover:bg-white/20 hover:scale-105 text-white p-2 rounded-full transition w-auto h-10 flex items-center justify-center px-4 font-bold text-xs gap-1 border border-white/20">
+                         <Icons.Login /> เข้าสู่ระบบ
+                     </Link>
                  )}
-                 <button onClick={logout} className="bg-red-500/20 hover:bg-red-500/40 hover:scale-105 text-red-200 p-2 rounded-full transition w-10 h-10 flex items-center justify-center backdrop-blur-sm" title="ออกจากระบบ">
-                    <Icons.Logout />
-                 </button>
              </div>
          </div>
       </header>
@@ -235,7 +251,7 @@ const handleUserSubmit = async (e: React.FormEvent) => {
       {/* Projects List */}
       <main className="px-4 space-y-4 max-w-md mx-auto pb-20">
         <h2 className="font-bold text-slate-700 mb-2 pl-2 border-l-4 border-slate-900">
-            โครงการของคุณ ({filteredProjects.length})
+            โครงการทั้งหมด ({filteredProjects.length})
         </h2>
 
         {filteredProjects.length === 0 ? (
@@ -244,9 +260,12 @@ const handleUserSubmit = async (e: React.FormEvent) => {
             </div>
          ) : (
             filteredProjects.map((p) => {
-             // ... Logic เดิม ...
              const status = { text: "กำลังดำเนินงาน", color: "bg-emerald-100 text-emerald-700", icon: "🟢" };
-             const canEdit = isAdmin || (user?.id && p.creator?.id === user.id);
+             
+             // ✅ UI PROTECTION: เช็คสิทธิ์ก่อนแสดงปุ่มแก้ไข
+             const isOwner = user?.id && p.creator && p.creator.id === user.id;
+             const canEdit = isAdmin || isOwner;
+
              return (
               <Link href={`/manage/project/${p.documentId}`} key={p.id} className="group block bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-all relative">
                  <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${status.color.split(' ')[0]}`}></div>
@@ -257,8 +276,15 @@ const handleUserSubmit = async (e: React.FormEvent) => {
                                 <span>{status.icon}</span> {status.text}
                              </div>
                              <h2 className="font-bold text-lg text-slate-800 leading-tight">{p.name}</h2>
-                             {isAdmin && p.creator && <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">👤 {p.creator.username}</p>}
+                             {/* แสดง Owner */}
+                             {p.creator && (
+                                <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">
+                                    👤 {p.creator.username} {isOwner && <span className="text-emerald-500 font-bold">(คุณ)</span>}
+                                </p>
+                             )}
                         </div>
+
+                        {/* ✅ ซ่อนปุ่มแก้ไขสำหรับ Guest */}
                         {canEdit && (
                             <div className="absolute top-4 right-4 flex gap-1 z-10">
                                 <button onClick={(e) => handleEditProject(e, p)} className="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 bg-slate-50 hover:bg-amber-50 hover:text-amber-500 transition-all shadow-sm border border-slate-100"><Icons.Edit /></button>
@@ -266,7 +292,7 @@ const handleUserSubmit = async (e: React.FormEvent) => {
                             </div>
                         )}
                     </div>
-                    {/* Progress Bar (Dummy for now) */}
+                    {/* Progress Bar (Dummy) */}
                     <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden mt-2"><div className="h-full bg-slate-900 rounded-full" style={{ width: `50%` }}></div></div>
                  </div>
               </Link>
@@ -274,8 +300,11 @@ const handleUserSubmit = async (e: React.FormEvent) => {
          })
         )}
       </main>
-
-      <button onClick={() => { resetProjectForm(); setIsModalOpen(true); }} className="fixed bottom-8 right-6 w-16 h-16 bg-slate-900 text-white rounded-full shadow-xl shadow-slate-900/30 flex items-center justify-center hover:scale-105 active:scale-95 transition-all z-[100]"><Icons.UserAdd /></button>
+      
+      {/* ✅ ปุ่มสร้างโปรเจค (แสดงเฉพาะตอน Login แล้วเท่านั้น) */}
+      {user && (
+          <button onClick={() => { resetProjectForm(); setIsModalOpen(true); }} className="fixed bottom-8 right-6 w-16 h-16 bg-slate-900 text-white rounded-full shadow-xl shadow-slate-900/30 flex items-center justify-center hover:scale-105 active:scale-95 transition-all z-[100]"><Icons.UserAdd /></button>
+      )}
 
       {/* --- MODAL: PROJECT --- */}
       {isModalOpen && (
@@ -283,6 +312,7 @@ const handleUserSubmit = async (e: React.FormEvent) => {
            <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl h-[80vh] overflow-y-auto">
               <h3 className="font-bold text-lg mb-4 text-slate-800">{editingId ? "✏️ แก้ไขโครงการ" : "🏗️ สร้างโครงการใหม่"}</h3>
               <form onSubmit={handleProjectSubmit} className="space-y-4">
+                  {/* Admin เลือก Owner ได้ */}
                   {isAdmin && (
                       <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
                           <label className="text-xs font-bold text-blue-700 ml-1 mb-1 block">👤 Owner</label>
@@ -293,7 +323,22 @@ const handleUserSubmit = async (e: React.FormEvent) => {
                       </div>
                   )}
                   <input placeholder="ชื่อโครงการ" className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200" value={projectForm.name} onChange={e => setProjectForm({...projectForm, name: e.target.value})} />
-                  {/* ... Inputs อื่นๆ ละไว้ ... */}
+                  
+                  {/* GPS & Location Inputs */}
+                  <div className="flex gap-2">
+                     <button type="button" onClick={handleGetLocation} className="bg-slate-100 text-slate-600 px-3 rounded-xl border border-slate-200 text-xs font-bold flex items-center gap-1 hover:bg-slate-200">
+                        {gpsLoading ? "..." : "📍 GPS"}
+                     </button>
+                     <input placeholder="พิกัด (Lat, Lng)" className="flex-1 p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm" value={projectForm.coordinates} onChange={e => setProjectForm({...projectForm, coordinates: e.target.value})} />
+                  </div>
+                  <input placeholder="ระยะทางจากสาขา (กม.)" type="number" className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200" value={projectForm.distance} onChange={e => setProjectForm({...projectForm, distance: e.target.value})} />
+                  <input placeholder="สถานที่ตั้ง" className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200" value={projectForm.location} onChange={e => setProjectForm({...projectForm, location: e.target.value})} />
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                      <div><label className="text-[10px] font-bold text-slate-400 pl-1">วันเริ่ม</label><input type="date" className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm" value={projectForm.start} onChange={e => setProjectForm({...projectForm, start: e.target.value})} /></div>
+                      <div><label className="text-[10px] font-bold text-slate-400 pl-1">วันจบ</label><input type="date" className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm" value={projectForm.end} onChange={e => setProjectForm({...projectForm, end: e.target.value})} /></div>
+                  </div>
+
                   <div className="flex gap-2 pt-2">
                     <button type="button" onClick={resetProjectForm} className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-600 font-bold">ยกเลิก</button>
                     <button type="submit" className="flex-1 py-3 rounded-xl bg-slate-900 text-white font-bold">{editingId ? "บันทึก" : "สร้าง"}</button>
@@ -303,72 +348,45 @@ const handleUserSubmit = async (e: React.FormEvent) => {
         </div>
       )}
 
-      {/* --- MODAL: USER MANAGEMENT (With Smart Position Input) --- */}
+      {/* --- MODAL: USER MANAGEMENT (ADMIN ONLY) --- */}
       {isUserMgrOpen && isAdmin && (
           <div className="fixed inset-0 bg-black/80 z-[1100] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
              <div className="bg-white w-full max-w-md rounded-3xl p-6 shadow-2xl h-[85vh] overflow-y-auto relative">
                 <button onClick={() => { setIsUserMgrOpen(false); resetUserForm(); }} className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition">✕</button>
-                
                 <h3 className="font-bold text-xl mb-1 text-slate-800 flex items-center gap-2">จัดการผู้ใช้งาน <span className="text-slate-400 text-sm font-normal">(Users)</span></h3>
                 
-                {/* Form User */}
                 <form onSubmit={handleUserSubmit} className="bg-slate-50 p-5 rounded-2xl mb-6 space-y-4 border border-slate-100 mt-4 shadow-inner">
                     <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
                         {isEditingUser ? <span className="text-amber-500">✏️ แก้ไขข้อมูล</span> : <span className="text-blue-500">➕ เพิ่มพนักงานใหม่</span>}
                     </h4>
-                    
                     <div className="grid grid-cols-2 gap-3">
                         <input required placeholder="Username" className="col-span-2 p-3 bg-white rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-400" value={userForm.username} onChange={e => setUserForm({...userForm, username: e.target.value})} />
                         <input required type="email" placeholder="Email" className="col-span-2 p-3 bg-white rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-400" value={userForm.email} onChange={e => setUserForm({...userForm, email: e.target.value})} />
                         <input type="password" placeholder={isEditingUser ? "รหัสผ่านใหม่ (ว่างไว้ถ้าไม่เปลี่ยน)" : "Password*"} className="col-span-2 p-3 bg-white rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-400" value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} />
                     </div>
-
-                    {/* ✅ SMART POSITION INPUT */}
                     <div>
                         <label className="text-[10px] font-bold text-slate-400 ml-1 mb-1 block">ตำแหน่ง (Position)</label>
-                        <input 
-                            placeholder="ระบุตำแหน่ง หรือเลือกด้านล่าง..." 
-                            className="w-full p-3 bg-white rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-400 mb-2" 
-                            value={userForm.position} 
-                            onChange={e => setUserForm({...userForm, position: e.target.value})} 
-                        />
-                        {/* Suggestions Chips */}
+                        <input placeholder="ระบุตำแหน่ง หรือเลือกด้านล่าง..." className="w-full p-3 bg-white rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-400 mb-2" value={userForm.position} onChange={e => setUserForm({...userForm, position: e.target.value})} />
                         <div className="flex flex-wrap gap-2">
                             {uniquePositions.map((pos, idx) => (
-                                <button 
-                                    key={idx} 
-                                    type="button"
-                                    onClick={() => setUserForm({...userForm, position: pos})}
-                                    className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-[10px] text-slate-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition active:scale-95"
-                                >
-                                    {pos}
-                                </button>
+                                <button key={idx} type="button" onClick={() => setUserForm({...userForm, position: pos})} className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-[10px] text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition active:scale-95">{pos}</button>
                             ))}
                         </div>
                     </div>
-                    
                     <div className="flex gap-2 pt-2">
                         {isEditingUser && <button type="button" onClick={resetUserForm} className="flex-1 py-3 text-xs bg-white border border-slate-200 text-slate-500 rounded-xl font-bold hover:bg-slate-100">ยกเลิก</button>}
-                        <button type="submit" className="flex-1 py-3 text-xs bg-slate-900 text-white rounded-xl font-bold shadow-lg hover:bg-black transition-all active:scale-95">
-                            {isEditingUser ? "อัปเดตข้อมูล" : "สร้าง User"}
-                        </button>
+                        <button type="submit" className="flex-1 py-3 text-xs bg-slate-900 text-white rounded-xl font-bold shadow-lg hover:bg-black transition-all active:scale-95">{isEditingUser ? "อัปเดตข้อมูล" : "สร้าง User"}</button>
                     </div>
                 </form>
 
-                {/* User List */}
                 <div className="space-y-2 pb-6">
                     <p className="text-xs font-bold text-slate-400 ml-1 mb-2">รายชื่อพนักงาน ({users.length})</p>
                     {users.map(u => (
                         <div key={u.id} className="flex items-center justify-between p-3 border border-slate-100 rounded-2xl hover:bg-slate-50 transition group">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 flex items-center justify-center text-sm font-bold text-slate-600 shadow-inner">
-                                    {u.username.charAt(0).toUpperCase()}
-                                </div>
+                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 flex items-center justify-center text-sm font-bold text-slate-600 shadow-inner">{u.username.charAt(0).toUpperCase()}</div>
                                 <div>
-                                    <p className="text-sm font-bold text-slate-700 flex items-center gap-1">
-                                        {u.username}
-                                        {u.role?.name === 'Admin' && <span className="text-[8px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full border border-amber-200">ADMIN</span>}
-                                    </p>
+                                    <p className="text-sm font-bold text-slate-700 flex items-center gap-1">{u.username} {u.role?.name === 'Admin' && <span className="text-[8px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full border border-amber-200">ADMIN</span>}</p>
                                     <p className="text-[10px] text-slate-400">{u.email} • <span className="text-slate-500 font-medium">{u.position || "-"}</span></p>
                                 </div>
                             </div>
@@ -382,7 +400,6 @@ const handleUserSubmit = async (e: React.FormEvent) => {
              </div>
           </div>
       )}
-
     </div>
   );
 }

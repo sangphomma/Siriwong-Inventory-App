@@ -1,30 +1,48 @@
+// app/manage/project/[id]/job/[jobId]/task/[taskId]/page.tsx
 "use client";
 
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { fetchTaskWithLogs, createTaskLog, updateTaskLog, deleteTaskLog } from "@/services/api";
+import { useAuth } from "@/app/context/AuthContext"; // ✅ เพิ่ม Auth context
+import { 
+  fetchTaskWithLogs, 
+  createTaskLog, 
+  updateTaskLog, 
+  deleteTaskLog,
+  fetchProjectJobs // ✅ เพิ่ม fetchProjectJobs เพื่อเช็ค Owner
+} from "@/services/api";
 import { STRAPI_URL } from "@/services/config";
 import { resizeImage } from "@/utils/imageResizer"; 
-import { useRouter } from "next/navigation";
 
-// Interface
+// Interface อัปเดตเพิ่ม logType
 interface LogFormData {
   id?: string;
   description: string;
   problems: string;
   progress: number;
+  logType: 'Progress' | 'Info' | 'Defect';
   newPhotos: File[];
   existingImages: any[];
 }
 
+// Helper: เลือกสีตาม Type
+const getTypeStyles = (type: string) => {
+    switch (type) {
+        case 'Progress': return { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', icon: '📈', badge: 'bg-blue-100 text-blue-700' };
+        case 'Defect': return { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', icon: '⚠️', badge: 'bg-red-100 text-red-700' };
+        case 'Info': default: return { bg: 'bg-cyan-50', border: 'border-cyan-200', text: 'text-cyan-700', icon: 'ℹ️', badge: 'bg-cyan-100 text-cyan-700' };
+    }
+};
+
 export default function TaskLogFeedPage({ params }: { params: Promise<{ id: string, jobId: string, taskId: string }> }) {
-  const { id, jobId, taskId } = use(params);
+  const { id: projectId, jobId, taskId } = use(params);
+  const { user } = useAuth(); // ✅ ดึง User จาก Context
   
   const [task, setTask] = useState<any>(null);
+  const [projectOwnerId, setProjectOwnerId] = useState<number | null>(null); // เก็บ ID เจ้าของ
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   
-  // State Form
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
   
@@ -32,26 +50,46 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
     description: "",
     problems: "",
     progress: 0,
+    logType: 'Info', 
     newPhotos: [],
     existingImages: []
   });
 
+  // 🔐 ACCESS CONTROL LOGIC
+  const isAdmin = user?.role?.name === 'Admin' || user?.role?.type === 'admin';
+  const isOwner = !!user && !!projectOwnerId && (user.id === projectOwnerId);
+  const canManage = !!user && (isAdmin || isOwner);
+
   const loadData = async () => {
     try {
       setLoading(true);
-      const data = await fetchTaskWithLogs(taskId);
-      setTask(data);
-      if (data && data.task_logs?.length > 0 && formMode === 'create') {
-         setFormData(prev => ({ ...prev, progress: data.task_logs[0].progress_percentage || 0 }));
+      // ดึง Task + ดึง Project (เพื่อเช็ค Owner)
+      const [taskData, projectData] = await Promise.all([
+          fetchTaskWithLogs(taskId),
+          fetchProjectJobs(projectId)
+      ]);
+      
+      setTask(taskData);
+
+      // หา ID Owner
+      if (projectData) {
+        const owner = projectData.creator?.id || projectData.find((p:any) => p.documentId === projectId)?.creator?.id;
+        setProjectOwnerId(owner);
       }
-    } catch (error) {
-      console.error("Error:", error);
-    } finally {
-      setLoading(false);
-    }
+
+      // Auto set progress
+      if (taskData && formMode === 'create') {
+         const lastProgressLog = taskData.task_logs?.find((l: any) => l.Log_Type === 'Progress');
+         const currentProg = lastProgressLog ? lastProgressLog.progress_percentage : (taskData.progress || 0);
+         setFormData(prev => ({ ...prev, progress: currentProg }));
+      }
+    } catch (error) { console.error("Error:", error); } 
+    finally { setLoading(false); }
   };
 
-  useEffect(() => { loadData(); }, [taskId]);
+  useEffect(() => { 
+      if(taskId && projectId) loadData(); 
+  }, [taskId, projectId]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -69,6 +107,7 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
       description: log.Description || "",
       problems: log.problems_found || "",
       progress: log.progress_percentage || 0,
+      logType: log.Log_Type || 'Info',
       newPhotos: [],
       existingImages: log.Media || []
     });
@@ -81,45 +120,49 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
       setLoading(true);
       await deleteTaskLog(logId, task.documentId);
       await loadData();
-    } catch (error) {
-      alert("ลบไม่สำเร็จ");
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) { alert("ลบไม่สำเร็จ"); } finally { setLoading(false); }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.description) return alert("กรุณาระบุรายละเอียด");
+    if (formData.logType === 'Defect' && !formData.problems) return alert("กรุณาระบุปัญหาที่พบ (ช่องสีแดง)");
 
     try {
       setSubmitting(true);
-      if (formMode === 'create') {
-        await createTaskLog(taskId, {
+      const payload = {
           description: formData.description,
           problems: formData.problems,
           progress: formData.progress,
+          logType: formData.logType, 
           photos: formData.newPhotos
-        });
+      };
+
+      if (formMode === 'create') {
+        await createTaskLog(taskId, payload);
       } else {
         const existingIds = formData.existingImages.map(img => img.id);
-        await updateTaskLog(formData.id!, {
-          description: formData.description,
-          problems: formData.problems,
-          progress: formData.progress,
-          photos: formData.newPhotos
-        }, existingIds, taskId); // ส่ง taskId ไปเพื่อ sync progress
+        await updateTaskLog(formData.id!, payload, existingIds, taskId); 
       }
       setIsFormOpen(false);
       setFormMode('create');
-      setFormData(prev => ({ ...prev, description: "", problems: "", newPhotos: [], existingImages: [] }));
+      setFormData(prev => ({ ...prev, description: "", problems: "", logType: 'Info', newPhotos: [], existingImages: [] }));
       await loadData();
-    } catch (error) {
-      alert("บันทึกไม่สำเร็จ");
-    } finally {
-      setSubmitting(false);
-    }
+    } catch (error) { alert("บันทึกไม่สำเร็จ"); } finally { setSubmitting(false); }
   };
+
+  const TypeButton = ({ type, label, icon, activeColor }: { type: any, label: string, icon: string, activeColor: string }) => (
+      <button 
+          type="button"
+          onClick={() => setFormData({ ...formData, logType: type })}
+          className={`flex-1 py-2 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1
+            ${formData.logType === type 
+                ? `${activeColor} border-transparent shadow-sm scale-105` 
+                : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}
+      >
+          <span>{icon}</span> {label}
+      </button>
+  );
 
   const removeNewPhoto = (index: number) => {
     const updated = [...formData.newPhotos];
@@ -128,15 +171,12 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
   };
 
   const removeExistingImage = (id: number) => {
-    setFormData({
-      ...formData,
-      existingImages: formData.existingImages.filter(img => img.id !== id)
-    });
+    setFormData({ ...formData, existingImages: formData.existingImages.filter(img => img.id !== id) });
   };
 
   if (loading && !task) return <div className="p-10 text-center text-slate-400">Loading...</div>;
 
-  const currentProgress = task?.progress ?? task?.task_logs?.[0]?.progress_percentage ?? 0;
+  const currentProgress = task?.progress || 0;
 
   return (
     <div className="min-h-screen bg-slate-50 pb-40 font-sans relative">
@@ -144,11 +184,11 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
       {/* Header */}
       <div className="bg-white sticky top-0 z-20 shadow-sm border-b border-slate-100">
         <div className="px-4 py-3 flex items-center gap-3">
-          <Link href={`/manage/project/${id}/job/${jobId}`} className="text-slate-400 text-2xl">←</Link>
+          <Link href={`/manage/project/${projectId}/job/${jobId}`} className="text-slate-400 text-2xl">←</Link>
           <div className="flex-1">
             <h1 className="font-bold text-slate-800 text-base truncate">{task?.task_name}</h1>
             <div className="flex items-center gap-2 text-xs text-slate-500">
-              <span className="text-blue-600 font-bold">Progress: {currentProgress}%</span>
+              <span className="text-blue-600 font-bold">Total Progress: {currentProgress}%</span>
             </div>
           </div>
         </div>
@@ -159,122 +199,174 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
 
       {/* Timeline List */}
       <main className="p-4 max-w-lg mx-auto space-y-6 mt-2">
-        {/* ✅ เพิ่มส่วนเช็ค Empty State: ถ้าไม่มี Logs ให้แสดงข้อความ */}
         {(!task?.task_logs || task.task_logs.length === 0) ? (
           <div className="text-center py-12 flex flex-col items-center opacity-60">
             <div className="text-4xl mb-2">📋</div>
-            <p className="text-slate-400">ยังไม่มีบันทึกงาน<br/>กดปุ่มด้านล่างเพื่อเริ่มบันทึก</p>
+            <p className="text-slate-400">
+                {canManage ? "เริ่มบันทึกหน้างาน (Site Diary)\nกดปุ่มด้านล่างได้เลย" : "ยังไม่มีบันทึกการทำงาน"}
+            </p>
           </div>
         ) : (
-          task.task_logs.map((log: any) => (
-            <div key={log.id} className="relative pl-6 border-l-2 border-slate-200 pb-4 last:border-0">
-              <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 ${log.problems_found ? "bg-red-100 border-red-500" : "bg-blue-100 border-blue-500"}`}></div>
-              
-              <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 relative -top-2">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="text-[10px] text-slate-400">
-                    {log.createdAt ? new Date(log.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour:'2-digit', minute:'2-digit' }) : '-'}
-                  </span>
+          task.task_logs.map((log: any) => {
+              const style = getTypeStyles(log.Log_Type || 'Info');
+              return (
+                <div key={log.id} className="relative pl-6 border-l-2 border-slate-200 pb-6 last:border-0 last:pb-0">
+                  {/* Dot Icon */}
+                  <div className={`absolute -left-[11px] top-0 w-6 h-6 rounded-full border-2 bg-white flex items-center justify-center text-[10px] shadow-sm z-10 ${style.border}`}>
+                      {style.icon}
+                  </div>
                   
-                  <div className="flex gap-2">
-                    <button onClick={() => handleEditClick(log)} className="text-slate-400 hover:text-blue-600 text-xs">✏️ แก้ไข</button>
-                    <button onClick={() => handleDeleteClick(log.documentId)} className="text-slate-400 hover:text-red-600 text-xs">🗑️ ลบ</button>
+                  <div className={`p-4 rounded-2xl shadow-sm border relative -top-2 ${style.bg} ${style.border}`}>
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex items-center gap-2">
+                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${style.badge}`}>
+                            {log.Log_Type || 'Info'}
+                         </span>
+                         <span className="text-[10px] text-slate-400">
+                            {log.createdAt ? new Date(log.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour:'2-digit', minute:'2-digit' }) : '-'}
+                         </span>
+                      </div>
+                      
+                      {/* 🔒 PROTECTED ACTIONS: ซ่อนปุ่มแก้ไข/ลบ ถ้าไม่ใช่ Admin/Owner */}
+                      {canManage && (
+                          <div className="flex gap-2 bg-white/50 rounded-lg px-1">
+                            <button onClick={() => handleEditClick(log)} className="text-slate-400 hover:text-blue-600 text-[10px] p-1">✏️</button>
+                            <button onClick={() => handleDeleteClick(log.documentId)} className="text-slate-400 hover:text-red-600 text-[10px] p-1">🗑️</button>
+                          </div>
+                      )}
+                    </div>
+
+                    {log.Log_Type === 'Progress' && (
+                        <div className="flex items-center gap-2 mb-2">
+                            <div className="h-1.5 w-24 bg-slate-200 rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-500" style={{ width: `${log.progress_percentage}%` }}></div>
+                            </div>
+                            <span className="text-xs font-bold text-blue-700">{log.progress_percentage}%</span>
+                        </div>
+                    )}
+                    
+                    <p className={`text-sm mb-2 whitespace-pre-wrap leading-relaxed ${style.text}`}>{log.Description}</p>
+                    
+                    {(log.problems_found || log.Log_Type === 'Defect') && log.problems_found && (
+                        <div className="bg-red-100/50 border border-red-200 p-2 rounded-lg text-xs text-red-700 mb-2 flex gap-2 items-start">
+                            <span>⚠️</span> <span>{log.problems_found}</span>
+                        </div>
+                    )}
+
+                    {log.Media && log.Media.length > 0 && (
+                      <div className="grid grid-cols-2 gap-2 mt-3">
+                        {log.Media.map((img: any) => (
+                          <img 
+                            key={img.id} 
+                            src={img.url.startsWith('http') ? img.url : `${STRAPI_URL}${img.url}`} 
+                            className="w-full h-24 object-cover rounded-lg bg-white border border-slate-100 shadow-sm"
+                            alt="Task Evidence"
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
-
-                <div className="flex items-center gap-2 mb-2">
-                   <span className="text-xs font-bold bg-slate-100 px-2 py-1 rounded-lg text-slate-600">{log.progress_percentage}%</span>
-                   {log.problems_found && <span className="text-xs text-red-600 font-bold">⚠️ พบปัญหา</span>}
-                </div>
-                
-                <p className="text-slate-800 text-sm mb-2 whitespace-pre-wrap">{log.Description}</p>
-                {log.problems_found && <div className="bg-red-50 p-2 rounded text-xs text-red-700 mb-2">⚠️ {log.problems_found}</div>}
-
-                {log.Media && log.Media.length > 0 && (
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    {log.Media.map((img: any) => (
-                      <img 
-                        key={img.id} 
-                        src={img.url.startsWith('http') ? img.url : `${STRAPI_URL}${img.url}`} 
-                        className="w-full h-24 object-cover rounded-lg bg-slate-100"
-                        alt="Task Evidence"
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))
+              );
+          })
         )}
       </main>
 
-      {/* Form Action Sheet */}
-      <div className={`fixed bottom-0 left-0 right-0 bg-white shadow-[0_-5px_20px_rgba(0,0,0,0.1)] z-30 transition-transform duration-300 rounded-t-3xl border-t ${isFormOpen ? 'translate-y-0' : 'translate-y-[100%]'}`}>
-         {!isFormOpen && (
-            <div className="absolute -top-20 right-4 left-4">
-               <button onClick={() => { setFormMode('create'); setIsFormOpen(true); }} className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2">
-                 <span>📷</span> บันทึกความคืบหน้า
-               </button>
-            </div>
-         )}
-
-         {isFormOpen && (
-           <div className="p-5 max-h-[85vh] overflow-y-auto">
-             <div className="flex justify-between items-center mb-4 sticky top-0 bg-white py-2 z-10">
-               <h3 className="font-bold text-slate-800 text-lg">
-                 {formMode === 'create' ? '📝 บันทึกงานใหม่' : '✏️ แก้ไขบันทึก'}
-               </h3>
-               <button onClick={() => setIsFormOpen(false)} className="w-8 h-8 rounded-full bg-slate-100 text-slate-500">✕</button>
-             </div>
-
-             <form onSubmit={handleSubmit} className="space-y-5">
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                  <div className="flex justify-between text-xs text-slate-500 mb-2">
-                    <label>ความคืบหน้า (%)</label>
-                    <span className="font-bold text-blue-600 text-xl">{formData.progress}%</span>
-                  </div>
-                  <input type="range" min="0" max="100" step="5" value={formData.progress} onChange={e => setFormData({...formData, progress: Number(e.target.value)})} className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600" />
+      {/* 🔒 Form Action Sheet: แสดงเฉพาะคนที่มีสิทธิ์ */}
+      {canManage && (
+          <div className={`fixed bottom-0 left-0 right-0 bg-white shadow-[0_-5px_20px_rgba(0,0,0,0.1)] z-30 transition-transform duration-300 rounded-t-[2rem] border-t ${isFormOpen ? 'translate-y-0' : 'translate-y-[100%]'}`}>
+             {!isFormOpen && (
+                <div className="absolute -top-20 right-4 left-4">
+                   <button onClick={() => { setFormMode('create'); setIsFormOpen(true); }} className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl shadow-xl flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform">
+                     <span>📝</span> บันทึก Site Diary
+                   </button>
                 </div>
-
-                <textarea placeholder="รายละเอียดงาน..." className="w-full p-3 font-medium text-blue-800 bg-white border border-slate-200 rounded-xl text-sm h-24 focus:ring-2 focus:ring-blue-500 outline-none" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
-                <input type="text" placeholder="⚠️ ปัญหาที่พบ (ถ้ามี)" className="w-full p-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-700 outline-none" value={formData.problems} onChange={e => setFormData({...formData, problems: e.target.value})} />
-
-                <div className="space-y-2">
-                   <label className="text-xs font-bold text-slate-500">รูปภาพแนบ</label>
-                   <div className="flex gap-2 overflow-x-auto pb-2">
-                      {formData.existingImages.map((img) => (
-                        <div key={img.id} className="relative flex-shrink-0 w-20 h-20">
-                          <img src={img.url.startsWith('http') ? img.url : `${STRAPI_URL}${img.url}`} className="w-full h-full object-cover rounded-lg border" />
-                          <button type="button" onClick={() => removeExistingImage(img.id)} className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full text-xs shadow">✕</button>
+             )}
+    
+             {isFormOpen && (
+               <div className="p-6 max-h-[85vh] overflow-y-auto">
+                 <div className="flex justify-between items-center mb-6 sticky top-0 bg-white py-2 z-10">
+                   <h3 className="font-bold text-slate-800 text-lg">
+                     {formMode === 'create' ? '📝 บันทึกงานใหม่' : '✏️ แก้ไขบันทึก'}
+                   </h3>
+                   <button onClick={() => setIsFormOpen(false)} className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
+                 </div>
+    
+                 <form onSubmit={handleSubmit} className="space-y-5">
+                    
+                    {/* 1. Type Selector */}
+                    <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl">
+                        <TypeButton type="Progress" label="คืบหน้า" icon="📈" activeColor="bg-blue-600 text-white" />
+                        <TypeButton type="Info" label="ข้อมูล" icon="ℹ️" activeColor="bg-cyan-500 text-white" />
+                        <TypeButton type="Defect" label="แจ้งปัญหา" icon="⚠️" activeColor="bg-red-500 text-white" />
+                    </div>
+    
+                    {/* 2. Progress Slider */}
+                    {formData.logType === 'Progress' && (
+                        <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 animate-in fade-in slide-in-from-top-2">
+                            <div className="flex justify-between text-xs text-blue-600 mb-2">
+                                <label className="font-bold">อัปเดตความคืบหน้า (%)</label>
+                                <span className="font-bold text-2xl">{formData.progress}%</span>
+                            </div>
+                            <input type="range" min="0" max="100" step="5" value={formData.progress} onChange={e => setFormData({...formData, progress: Number(e.target.value)})} className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer accent-blue-600" />
+                            <p className="text-[10px] text-blue-400 mt-2 text-center">*ค่านี้จะถูกนำไปคำนวณ Progress รวมของงาน</p>
                         </div>
-                      ))}
-                      {formData.newPhotos.map((file, idx) => (
-                        <div key={idx} className="relative flex-shrink-0 w-20 h-20">
-                          <img src={URL.createObjectURL(file)} className="w-full h-full object-cover rounded-lg border opacity-80" />
-                          <button type="button" onClick={() => removeNewPhoto(idx)} className="absolute -top-2 -right-2 w-6 h-6 bg-slate-500 text-white rounded-full text-xs shadow">✕</button>
-                        </div>
-                      ))}
-                   </div>
-                   
-                   <div className="grid grid-cols-2 gap-3">
-                      <label className="cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-xl text-center text-sm font-bold flex flex-col items-center justify-center gap-1 border border-slate-200">
-                         <span>📸 ถ่ายรูป</span>
-                         <input type="file" accept="image/*" capture="environment" onChange={handleFileChange} className="hidden" />
-                      </label>
-                      <label className="cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-xl text-center text-sm font-bold flex flex-col items-center justify-center gap-1 border border-slate-200">
-                         <span>🖼️ อัลบั้ม</span>
-                         <input type="file" multiple accept="image/*" onChange={handleFileChange} className="hidden" />
-                      </label>
-                   </div>
-                </div>
+                    )}
+    
+                    {/* 3. Description Box */}
+                    <textarea placeholder={formData.logType === 'Defect' ? "รายละเอียดปัญหา..." : "รายละเอียดการทำงาน..."} className="w-full p-4 font-medium text-slate-700 bg-white border border-slate-200 rounded-2xl text-sm h-32 focus:ring-2 focus:ring-slate-400 outline-none resize-none shadow-sm" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+                    
+                    {/* 4. Problem Input */}
+                    <div className={`transition-all ${formData.logType === 'Defect' ? 'block' : 'opacity-100'}`}>
+                        <input 
+                            type="text" 
+                            placeholder={formData.logType === 'Defect' ? "⚠️ ระบุหัวข้อปัญหา (จำเป็น)*" : "⚠️ ปัญหาที่พบ (ถ้ามี)"} 
+                            className={`w-full p-4 rounded-2xl text-sm outline-none transition-colors
+                                ${formData.logType === 'Defect' 
+                                    ? 'bg-red-50 border border-red-300 text-red-700 placeholder:text-red-400 focus:ring-2 focus:ring-red-200' 
+                                    : 'bg-slate-50 border border-slate-200 text-slate-600 focus:ring-2 focus:ring-slate-200'}`}
+                            value={formData.problems} 
+                            onChange={e => setFormData({...formData, problems: e.target.value})} 
+                        />
+                    </div>
+    
+                    {/* 5. Photos */}
+                    <div className="space-y-2 pt-2">
+                       <label className="text-xs font-bold text-slate-500 ml-1">รูปภาพแนบ</label>
+                       <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                          {formData.existingImages.map((img) => (
+                            <div key={img.id} className="relative flex-shrink-0 w-20 h-20 group">
+                              <img src={img.url.startsWith('http') ? img.url : `${STRAPI_URL}${img.url}`} className="w-full h-full object-cover rounded-xl border shadow-sm" />
+                              <button type="button" onClick={() => removeExistingImage(img.id)} className="absolute -top-2 -right-2 w-6 h-6 bg-white text-red-500 rounded-full text-xs shadow-md border border-slate-100 flex items-center justify-center">✕</button>
+                            </div>
+                          ))}
+                          {formData.newPhotos.map((file, idx) => (
+                            <div key={idx} className="relative flex-shrink-0 w-20 h-20 group">
+                              <img src={URL.createObjectURL(file)} className="w-full h-full object-cover rounded-xl border shadow-sm opacity-90" />
+                              <button type="button" onClick={() => removeNewPhoto(idx)} className="absolute -top-2 -right-2 w-6 h-6 bg-slate-700 text-white rounded-full text-xs shadow-md flex items-center justify-center">✕</button>
+                            </div>
+                          ))}
+                          
+                          <label className="flex-shrink-0 w-20 h-20 bg-slate-50 hover:bg-slate-100 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center cursor-pointer text-slate-400 transition-colors">
+                             <span className="text-xl">📷</span>
+                             <span className="text-[10px] font-bold">เพิ่มรูป</span>
+                             <input type="file" multiple accept="image/*" onChange={handleFileChange} className="hidden" />
+                          </label>
+                       </div>
+                    </div>
+    
+                    <button type="submit" disabled={submitting} className={`w-full text-white font-bold py-4 rounded-2xl shadow-lg shadow-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98]
+                        ${formData.logType === 'Progress' ? 'bg-blue-600 hover:bg-blue-700' : 
+                          formData.logType === 'Defect' ? 'bg-red-500 hover:bg-red-600' : 
+                          'bg-cyan-500 hover:bg-cyan-600'}`}>
+                       {submitting ? "กำลังบันทึก..." : (formMode === 'create' ? "บันทึกข้อมูล" : "อัปเดตการแก้ไข")}
+                    </button>
+                 </form>
+               </div>
+             )}
+          </div>
+      )}
 
-                <button type="submit" disabled={submitting} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-200 disabled:bg-slate-300">
-                   {submitting ? "กำลังบันทึก..." : (formMode === 'create' ? "บันทึกข้อมูล" : "อัปเดตการแก้ไข")}
-                </button>
-             </form>
-           </div>
-         )}
-      </div>
     </div>
   );
 }

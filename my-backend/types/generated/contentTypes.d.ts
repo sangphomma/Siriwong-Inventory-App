@@ -1032,7 +1032,9 @@ export interface ApiTaskLogTaskLog extends Struct.CollectionTypeSchema {
       'api::task-log.task-log'
     > &
       Schema.Attribute.Private;
-    Log_Type: Schema.Attribute.Enumeration<['Progress', 'Defect', 'Photo']>;
+    Log_Type: Schema.Attribute.Enumeration<
+      ['Progress', 'Defect', 'Photo', 'Info']
+    >;
     Media: Schema.Attribute.Media<
       'images' | 'files' | 'videos' | 'audios',
       true

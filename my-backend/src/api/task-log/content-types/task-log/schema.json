@@ -22,7 +22,8 @@
       "enum": [
         "Progress",
         "Defect",
-        "Photo"
+        "Photo",
+        "Info"
       ]
     },
     "Media": {
