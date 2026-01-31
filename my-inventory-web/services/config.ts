@@ -7,6 +7,7 @@
 
 
 // ✅ Logic: ถ้าเป็น Production (บน Server) ให้ใช้โดเมนจริง, ถ้าไม่ใช่ ให้ใช้ Localhost
+// ✅ แก้ไข: เติม :1337 ต่อท้ายโดเมน
 export const STRAPI_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://siriwong.online'  // 🌐 ลิงก์บน Server จริง
-  : 'http://localhost:1337';   // 🏠 ลิงก์เครื่องเรา
+  ? 'http://siriwong.online:1337'  // 👈 ใส่ port 1337 และใช้ http (ถ้ายังไม่มี SSL)
+  : 'http://localhost:1337';
