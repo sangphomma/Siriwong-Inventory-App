@@ -47,6 +47,9 @@
     },
     "problems_found": {
       "type": "text"
+    },
+    "action_date": {
+      "type": "datetime"
     }
   }
 }

@@ -123,17 +123,13 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
     const end = proj.end_date ? new Date(proj.end_date).getTime() : new Date().getTime(); 
     const today = new Date().getTime();
     
-    // ถ้ายังไม่เริ่ม
     if (today < start) return { text: "⏳ รอเริ่มงาน", color: "text-blue-500" };
 
     const totalDuration = end - start;
     const timeElapsed = today - start;
-    
-    // % เวลาที่ผ่านไปแล้ว
     let timeProgress = (timeElapsed / totalDuration) * 100;
     if (timeProgress > 100) timeProgress = 100;
 
-    // % งานจริง
     let actualProgress = 0;
     if (proj.jobs && proj.jobs.length > 0) {
        const totalJobProg = proj.jobs.reduce((sum: number, j: any) => sum + (j.progress || 0), 0);
@@ -143,12 +139,12 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
     const diff = actualProgress - timeProgress;
     
     if (actualProgress >= 100) return { text: "✅ เสร็จสมบูรณ์", color: "text-green-600" };
-    if (diff >= -5) return { text: "✨ ตามแผนงาน", color: "text-green-600" }; // ยอมให้ช้าได้ 5%
+    if (diff >= -5) return { text: "✨ ตามแผนงาน", color: "text-green-600" }; 
     if (diff < -5) return { text: `⚠️ ช้ากว่าแผน ${Math.round(diff)}%`, color: "text-red-500" };
     return { text: "กำลังดำเนินงาน", color: "text-blue-500" };
   };
 
-  // ✅ Helper: สร้างข้อความรายงาน
+  // ✅ Helper: สร้างข้อความรายงาน (Updated)
   const generateReport = () => {
     if (!project) return "";
     
@@ -159,7 +155,6 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
     const end = project.end_date ? new Date(project.end_date).getTime() : 0;
     const duration = start && end ? Math.ceil((end - start) / (1000 * 60 * 60 * 24)) : 0;
 
-    // ✅ ปรับข้อความระยะทางตามที่ขอ
     const distanceText = project.distance_from_branch 
         ? `ระยะทางประมาณ ${project.distance_from_branch} กม. เทียบกับออฟฟิต-สาขาบางเขน` 
         : "-";
@@ -176,15 +171,19 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
     if (project.jobs && project.jobs.length > 0) {
         project.jobs.forEach((job: any, index: number) => {
             text += `${index + 1}. ${job.title} (${job.progress || 0}%)\n`;
+            
             if (job.job_tasks && job.job_tasks.length > 0) {
                 job.job_tasks.forEach((task: any) => {
-                     // กรองเฉพาะงานที่ Active เพื่อประหยัดพื้นที่ข้อความ
-                     if (task.progress > 0 && task.progress < 100) {
-                        text += `   ▫️ ${task.task_name}: ${task.progress}%\n`;
-                     } else if (task.progress === 100) {
+                     if (task.progress === 100) {
                         text += `   ✅ ${task.task_name}: 100%\n`;
+                     } else if (task.progress > 0) {
+                        text += `   🚧 ${task.task_name}: ${task.progress}%\n`;
+                     } else {
+                        text += `   ⏳ ${task.task_name}: 0% (รอเริ่ม)\n`;
                      }
                 });
+            } else {
+                text += `   (ยังไม่มีรายการย่อย)\n`;
             }
             text += `\n`;
         });
@@ -194,9 +193,8 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
 
     text += `----------------------------\n`;
     text += `🔗 *ดูรายละเอียด/รูปภาพ:*\n`;
-    text += `${window.location.href}\n\n`;
+    text += `http://siriwong.online/manage/project/${projectId}\n\n`;
     
-    // ✅ เพิ่ม Credential
     text += `(สำหรับผู้ที่ยังไม่มี Account)\n`;
     text += `👤 User: siriwong\n`;
     text += `🔑 Pass: 123456`;
@@ -204,19 +202,14 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
     return text;
   };
 
-  // ✅ ฟังก์ชัน 1: ส่ง LINE (พยายามเปิด App)
   const handleShareLine = () => {
     const report = generateReport();
-    // ตัดข้อความถ้ายาวเกินไป (ป้องกัน Error)
     const safeReport = report.length > 1500 
         ? report.substring(0, 1500) + "\n...(ข้อความยาวเกินไป โปรดดูต่อในเว็บ)" 
         : report;
-        
-    // ใช้ line://msg/text/ แบบระบุเจาะจง (ไม่อ้อมไป web)
     window.location.href = `line://msg/text/${encodeURIComponent(safeReport)}`;
   };
 
-  // ✅ ฟังก์ชัน 2: คัดลอกลง Clipboard (ชัวร์สุด)
   const handleCopyReport = async () => {
     const report = generateReport();
     try {
@@ -277,15 +270,24 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
     if (node) observer.current.observe(node);
   }, [loadingLogs, hasMoreLogs]);
 
+  // ✅ แก้ไข Logic Grouping: ใช้วันที่ action_date เป็นหลัก
   const groupedLogs = useMemo(() => {
     const groups: { [key: string]: any[] } = {};
     siteLogs.forEach((log) => {
-        const dateObj = new Date(log.createdAt);
-        const dateKey = dateObj.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
+        // ใช้ action_date ก่อน ถ้าไม่มีค่อยใช้ createdAt
+        const dateObj = new Date(log.action_date || log.createdAt);
+        const dateKey = dateObj.toLocaleDateString('th-TH', { 
+            day: 'numeric', month: 'short', year: '2-digit' 
+        });
         if (!groups[dateKey]) groups[dateKey] = [];
         groups[dateKey].push(log);
     });
-    return Object.entries(groups).sort((a, b) => new Date(b[1][0].createdAt).getTime() - new Date(a[1][0].createdAt).getTime());
+    // เรียงวันที่: ใหม่ -> เก่า (ใช้ action_date เช่นกัน)
+    return Object.entries(groups).sort((a, b) => {
+        const dateA = new Date(a[1][0].action_date || a[1][0].createdAt).getTime();
+        const dateB = new Date(b[1][0].action_date || b[1][0].createdAt).getTime();
+        return dateB - dateA;
+    });
   }, [siteLogs]);
 
   const handleCreateJob = async (e: React.FormEvent) => { e.preventDefault(); if (!newJobTitle) return alert("กรุณากรอกชื่อหมวดงาน"); try { setSubmitting(true); await createJob(newJobTitle, project.documentId); setNewJobTitle(""); setIsCreateOpen(false); await loadProjectData(); } catch (error) { alert("สร้างหมวดงานไม่สำเร็จ"); } finally { setSubmitting(false); } };
@@ -518,8 +520,9 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
                                                 href={`/manage/project/${projectId}/job/${log.jobId}/task/${log.taskId}`}
                                                 className={`block bg-white p-3 rounded-2xl border ${borderColor} shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)] hover:shadow-md transition-all active:scale-[0.99] relative group`}
                                             >
+                                                {/* ✅ แก้ไข: แสดงเวลาจาก action_date ถ้ามี */}
                                                 <div className="absolute -left-[3.5rem] top-4 text-[9px] text-slate-400 font-medium w-8 text-right">
-                                                    {new Date(log.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute:'2-digit' })}
+                                                    {new Date(log.action_date || log.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute:'2-digit' })}
                                                 </div>
                                                 <div className="absolute -left-[1.65rem] top-[1.1rem] w-1.5 h-1.5 rounded-full bg-slate-200 ring-2 ring-white"></div>
                                                 <div className="flex gap-3">

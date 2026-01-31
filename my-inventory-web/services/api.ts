@@ -326,12 +326,11 @@ const recalculateTaskProgress = async (jobTaskDocId: string) => {
   }
 };
 
+// ✅ แก้ไข: createTaskLog ให้รับ action_date
 export const createTaskLog = async (jobTaskDocId: string, data: any) => {
   try {
-    // ... (ส่วน upload รูปเหมือนเดิม) ...
     let mediaIds: any[] = [];
     if (data.photos && data.photos.length > 0) {
-      // ... (Code Upload รูปเดิม) ...
        const uploadPromises = data.photos.map(async (file: File) => {
         const formData = new FormData();
         formData.append('files', file); 
@@ -345,20 +344,20 @@ export const createTaskLog = async (jobTaskDocId: string, data: any) => {
     const payload = {
       data: {
         Description: String(data.description || ""), 
-        Log_Type: data.logType || "Info", // 👈 รับค่า Type จาก Frontend
+        Log_Type: data.logType || "Info", 
         job_task: jobTaskDocId,
         Media: mediaIds,
-        // ถ้าไม่ใช่ Progress ให้ส่ง 0 หรือ null ไป (เพื่อไม่ให้กวน Data)
         progress_percentage: data.logType === 'Progress' ? Number(data.progress || 0) : 0, 
-        problems_found: data.problems || "" 
+        problems_found: data.problems || "",
+        // ✅ เพิ่ม: บันทึกวันที่ย้อนหลัง (ถ้ามี) หรือใช้วันปัจจุบัน
+        action_date: data.action_date ? new Date(data.action_date).toISOString() : new Date().toISOString(),
+        // หมายเหตุ: ต้องไปสร้าง field 'action_date' (Date/Time) ใน Strapi ด้วยนะครับ
+        // หรือถ้าจะโกงใช้ createdAt ต้องไปแก้สิทธิ์ให้ create ส่ง createdAt ได้ (ไม่แนะนำ)
       }
     };
 
     const response = await apiClient.post('/task-logs', payload);
-    
-    // Sync เฉพาะถ้าเป็น Progress (หรือจะ Sync ทุกครั้งเพื่อให้ชัวร์ก็ได้ครับ ผมแนะนำ Sync ทุกครั้งเผื่ออนาคต)
     await recalculateTaskProgress(jobTaskDocId); 
-
     return response.data;
   } catch (error: any) {
     throw error;
@@ -367,8 +366,8 @@ export const createTaskLog = async (jobTaskDocId: string, data: any) => {
 
 
 // ... (updateTaskLog ก็ทำคล้ายกัน เพิ่ม field Log_Type เข้าไปใน payload) ...
+// ✅ แก้ไข: updateTaskLog ให้รับ action_date
 export const updateTaskLog = async (logDocumentId: string, data: any, existingMediaIds: number[], jobTaskDocId: string) => {
-    // ... (Code Upload รูปเดิม) ...
     let newMediaIds: any[] = [];
     if (data.photos && data.photos.length > 0) {
        const uploadPromises = data.photos.map(async (file: File) => {
@@ -386,19 +385,19 @@ export const updateTaskLog = async (logDocumentId: string, data: any, existingMe
     const payload = {
       data: {
         Description: String(data.description || ""),
-        Log_Type: data.logType, // 👈 Update Type
+        Log_Type: data.logType, 
         Media: finalMediaIds, 
         progress_percentage: data.logType === 'Progress' ? Number(data.progress || 0) : 0, 
-        problems_found: data.problems || "" 
+        problems_found: data.problems || "",
+        // ✅ อัปเดตวันที่ด้วย
+        action_date: data.action_date ? new Date(data.action_date).toISOString() : undefined
       }
     };
 
     const response = await apiClient.put(`/task-logs/${logDocumentId}`, payload);
-
     if (jobTaskDocId) {
       await recalculateTaskProgress(jobTaskDocId);
     }
-
     return response.data;
 };
 

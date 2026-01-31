@@ -1021,6 +1021,7 @@ export interface ApiTaskLogTaskLog extends Struct.CollectionTypeSchema {
     draftAndPublish: true;
   };
   attributes: {
+    action_date: Schema.Attribute.DateTime;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
