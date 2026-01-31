@@ -210,15 +210,57 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
     window.location.href = `line://msg/text/${encodeURIComponent(safeReport)}`;
   };
 
-  const handleCopyReport = async () => {
-    const report = generateReport();
+// --- เริ่มต้นส่วนที่ต้องแก้ (แปะทับ handleCopyReport ของเดิม) ---
+
+  // 1. ฟังก์ชันสำรอง (ท่าไม้ตายสำหรับ HTTP)
+  const fallbackCopyTextToClipboard = (text: string) => {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    
+    // ซ่อน textarea ไม่ให้รกหน้าจอ
+    textArea.style.position = "fixed";
+    textArea.style.left = "-9999px";
+    textArea.style.top = "0";
+    
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+
     try {
-        await navigator.clipboard.writeText(report);
-        alert("คัดลอกรายงานแล้ว! \nไปที่ LINE แล้วกดวาง (Ctrl+V) ได้เลยครับ 📋");
+        const successful = document.execCommand('copy');
+        if (successful) {
+             alert("คัดลอกรายงานเรียบร้อยแล้ว! (HTTP Mode) \nไปที่ LINE แล้วกดวาง (Ctrl+V) ได้เลยครับ 📋");
+        } else {
+             alert("ขออภัย Browser ไม่รองรับการคัดลอก");
+        }
     } catch (err) {
-        alert("คัดลอกไม่สำเร็จ (Browser ไม่รองรับ)");
+        console.error('Fallback: Oops, unable to copy', err);
+        alert("เกิดข้อผิดพลาดในการคัดลอก");
+    }
+
+    document.body.removeChild(textArea);
+  };
+
+  // 2. ฟังก์ชันหลัก (Updated)
+  const handleCopyReport = () => {
+    const report = generateReport();
+    
+    // เช็คว่าถ้าเป็น HTTPS หรือ Localhost ให้ลองใช้วิธีปกติก่อน
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(report).then(() => {
+            alert("คัดลอกรายงานแล้ว! \nไปที่ LINE แล้วกดวาง (Ctrl+V) ได้เลยครับ 📋");
+        }).catch((err) => {
+            // ถ้าวิธีปกติพัง ให้เรียกวิธีสำรอง
+            console.warn("Clipboard API failed, using fallback...");
+            fallbackCopyTextToClipboard(report);
+        });
+    } else {
+        // ถ้าเป็น HTTP (เว็บเราตอนนี้) ให้ใช้วิธีสำรองเลย
+        fallbackCopyTextToClipboard(report);
     }
   };
+
+  // --- สิ้นสุดส่วนที่ต้องแก้ ---
 
   const loadProjectData = async () => {
     try {
