@@ -279,12 +279,16 @@ export const deleteJobTask = async (taskDocId: string) => {
 // ==========================================
 
 // ✅ คำนวณค่าเฉลี่ย Progress จากลูกๆ (Logs) ขึ้นแม่ (JobTask)
+// services/api.ts
+
+// ... (ส่วนอื่นๆ ของไฟล์)
+
 const recalculateTaskProgress = async (jobTaskDocId: string) => {
   try {
     const query = {
       populate: {
         task_logs: {
-          fields: ['progress_percentage', 'Log_Type'] // 👈 ดึง Log_Type มาด้วย
+          fields: ['progress_percentage', 'Log_Type', 'action_date', 'createdAt'] 
         }
       }
     };
@@ -296,24 +300,24 @@ const recalculateTaskProgress = async (jobTaskDocId: string) => {
     const taskData = normalizeStrapiData(response.data.data);
     const logs = taskData.task_logs || [];
 
-    // 🎯 LOGIC ใหม่: กรองเฉพาะ Type 'Progress'
+    // 🎯 LOGIC: กรองเฉพาะ Type 'Progress'
     const progressLogs = logs.filter((l: any) => l.Log_Type === 'Progress');
 
     let newProgress = 0;
     
     if (progressLogs.length > 0) {
-      // ✅ (Option A) เปิดใช้ส่วนนี้: ใช้ค่าล่าสุด (Latest Value)
-      // เรียงลำดับเวลาจาก "ใหม่ -> เก่า"
-      progressLogs.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      // หยิบตัวแรก (ตัวใหม่สุด) มาใช้เลย
-      newProgress = progressLogs[0].progress_percentage;
+      // ✅ เรียงลำดับโดยใช้ action_date (วันที่ทำงานจริง) เป็นหลัก ถ้าไม่มีให้ใช้ createdAt
+      progressLogs.sort((a: any, b: any) => {
+        const dateA = new Date(a.action_date || a.createdAt).getTime();
+        const dateB = new Date(b.action_date || b.createdAt).getTime();
+        return dateB - dateA; // ใหม่สุดอยู่บน (Index 0)
+      });
 
-      // ❌ (Option B) ปิดส่วนนี้ไป: ไม่ใช้ค่าเฉลี่ยแล้ว
-      // const total = progressLogs.reduce((sum: number, log: any) => sum + (log.progress_percentage || 0), 0);
-      // newProgress = Math.round(total / progressLogs.length);
-} else {
-    newProgress = taskData.progress || 0; 
-}
+      // หยิบตัวแรกที่ใหม่ที่สุดมาเป็น Progress ปัจจุบัน
+      newProgress = progressLogs[0].progress_percentage;
+    } else {
+      newProgress = 0; // ถ้าไม่มี Log Progress เลย ให้เซ็ตเป็น 0
+    }
 
     await apiClient.put(`/job-tasks/${jobTaskDocId}`, {
       data: { progress: newProgress }
@@ -325,6 +329,8 @@ const recalculateTaskProgress = async (jobTaskDocId: string) => {
     console.error("⚠️ Failed to recalculate task progress", error);
   }
 };
+
+// ... (ส่วนที่เหลือคงเดิม)
 
 // ✅ แก้ไข: createTaskLog ให้รับ action_date
 export const createTaskLog = async (jobTaskDocId: string, data: any) => {
