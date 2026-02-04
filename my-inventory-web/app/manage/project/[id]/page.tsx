@@ -270,7 +270,7 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
                             </div>
                             <div className={`relative group p-5 rounded-[2rem] border shadow-sm flex items-start gap-4 transition-all hover:shadow-lg ${isActive ? `bg-white ${theme.border}` : 'bg-slate-50 opacity-60'}`}>
                                 <div className={`w-12 h-12 overflow-hidden rounded-2xl flex items-center justify-center text-white font-black text-lg shadow-inner ${theme.avatar} ring-4 ring-offset-2 ${isActive ? theme.glow : ''}`}>
-                                    {m.user?.avatar?.url ? <img className="h-full w-full object-cover" src={m.user.avatar.url.startsWith('http') ? m.user.avatar.url : `${STRAPI_URL}${m.user.avatar.url}`} className="h-full w-full object-cover" /> : <span>{m.user?.username?.charAt(0).toUpperCase()}</span>}
+                                    {m.user?.avatar?.url ? <img className="h-full w-full object-cover" src={m.user.avatar.url.startsWith('http') ? m.user.avatar.url : `${STRAPI_URL}${m.user.avatar.url}`}  /> : <span>{m.user?.username?.charAt(0).toUpperCase()}</span>}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex justify-between">
