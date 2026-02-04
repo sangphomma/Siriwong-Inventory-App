@@ -18,7 +18,7 @@ import {
   fetchProjectLogs 
 } from "@/services/api"; 
 
-// --- Helper Functions (ขอบมนรูปภาพสมบูรณ์) ---
+// --- Helper Functions ---
 const getUserColor = (name: string) => {
     if (!name) return { bg: "bg-slate-100", text: "text-slate-600", avatar: "bg-slate-500", border: "border-slate-300", glow: "ring-slate-200 shadow-slate-300" };
     const themes = [
@@ -66,7 +66,7 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
   const isOwner = !!user && !!project?.creator && project.creator.id === user.id;
   const canManage = !!user && (isAdmin || isOwner);
 
-  // ✅ 1. Progress Double Average สำหรับสรุปรายงาน 
+  // ✅ 1. Progress Double Average
   const totalProjProgress = useMemo(() => {
     if (!project?.jobs || project.jobs.length === 0) return 0;
     const jobAverages = project.jobs.map((job: any) => {
@@ -76,7 +76,7 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
     return Math.round(jobAverages.reduce((sum: number, avg: number) => sum + avg, 0) / project.jobs.length);
   }, [project?.jobs]);
 
-  // ✅ 2. ฟังก์ชันเจนรายงานละเอียด (✅ 🚧 ⏳) [cite: 5, 12, 13]
+  // ✅ 2. ฟังก์ชันเจนรายงานละเอียด (กู้คืน Logic Emoji ครบถ้วน) 
   const generateSummaryText = () => {
     if (!project) return "";
     let text = `=============================\n📅 รายงานความคืบหน้าประจำวัน\n----------------------------\n🏠 โครงการ: ${project.name}\n📍 พิกัด: ${project.location || '-'} (ห่างจากโรงงาน ${project.distance_from_branch || 0} กม.)\n\n📊 ภาพรวมโครงการ\n`;
@@ -96,10 +96,24 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
     return text;
   };
 
-  const handleShareToLine = () => window.open(`https://line.me/R/msg/text/?${encodeURIComponent(generateSummaryText())}`, '_blank');
-  const handleCopyToClipboard = () => navigator.clipboard.writeText(generateSummaryText()).then(() => alert("คัดลอกรายงานละเอียดแล้ว!"));
+  // ✅ แก้ไข: ใส่ Logic การ Copy ให้ใช้งานได้จริง
+  const handleCopyToClipboard = () => {
+    const text = generateSummaryText();
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+        alert("✅ คัดลอกรายงานละเอียดเรียบร้อย! ไปวางใน LINE ได้เลยครับ");
+    }).catch(err => {
+        console.error('Copy failed', err);
+        alert("❌ คัดลอกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
+    });
+  };
 
-  // ✅ 3. Infinite Scroll 
+  const handleShareToLine = () => {
+    const text = generateSummaryText();
+    window.open(`https://line.me/R/msg/text/?${encodeURIComponent(text)}`, '_blank');
+  };
+
+  // ✅ 3. Infinite Scroll
   const loadLogs = async (page: number, reset: boolean = false) => {
       try {
           setLoadingLogs(true);
@@ -151,18 +165,20 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
   const handleSaveMember = async (e: any) => { e.preventDefault(); try { if (editingMember) await updateProjectMember(editingMember.documentId, memberForm); else await addProjectMember({ projectSiteId: projectId, ...memberForm }); setIsMemberModalOpen(false); loadProjectData(); } catch (err) { alert("ล้มเหลว"); } };
   const handleDeleteMember = async (id: string) => { if(confirm("ลบสมาชิก?")) { await deleteProjectMember(id); loadProjectData(); } };
 
-  if (loading && !project) return <div className="h-screen flex items-center justify-center text-slate-400 font-bold">กำลังโหลด...</div>;
+  if (loading && !project) return <div className="h-screen flex items-center justify-center text-slate-400 font-bold tracking-widest uppercase text-xs">Loading Siriwong Data...</div>;
 
   return (
     <div className="min-h-screen bg-slate-50 pb-32 font-sans relative">
-      {/* Header Section (LINE / ระยะทาง / ขอบมนรูป) [cite: 4, 11] */}
       <div className="bg-slate-900 text-white rounded-b-[3rem] p-6 pb-20 shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 rounded-full blur-3xl -mr-20 -mt-20"></div>
         <div className="relative z-10 max-w-md mx-auto">
             <div className="flex justify-between items-start mb-6">
                 <Link href="/manage" className="text-white/40 text-xs flex items-center gap-1 bg-white/5 px-3 py-1.5 rounded-full backdrop-blur-md">← กลับ</Link>
                 <div className="flex gap-2">
-                    <button onClick={handleCopyToClipboard} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-full shadow-lg transition-transform active:scale-90"><Icons.Copy /></button>
+                    {/* ✅ ปุ่ม Copy รายงานละเอียดที่แก้ไขแล้ว */}
+                    <button onClick={handleCopyToClipboard} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-full shadow-lg transition-transform active:scale-90" title="คัดลอกรายงานละเอียด">
+                       <Icons.Copy />
+                    </button>
                     <button onClick={handleShareToLine} className="bg-[#06C755] hover:bg-[#05b54d] text-white px-5 py-2.5 rounded-full text-[10px] font-black shadow-lg transition-transform active:scale-95 uppercase tracking-tighter"><span>LINE</span> แชร์รายงาน</button>
                 </div>
             </div>
@@ -183,7 +199,7 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
       </div>
 
       <main className="max-w-md mx-auto px-4 -mt-8 relative z-20 space-y-6">
-        {/* Timeline ทีมงาน (Avatar มน) [cite: 4, 11] */}
+        {/* Timeline ทีมงาน */}
         <section className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100">
             <div className="flex justify-between items-center mb-8"><h2 className="font-black text-slate-800 text-base font-sans">👷 Timeline ทีมงาน</h2>{canManage && <button onClick={() => { setEditingMember(null); setMemberForm({ userId: "", role: "", responsibility: "", start_date: "", end_date: "" }); setIsMemberModalOpen(true); }} className="text-[10px] bg-blue-50 text-blue-600 px-4 py-2 rounded-full font-black shadow-sm tracking-tight">+ เพิ่มพนักงาน</button>}</div>
             <div className="relative pl-4 border-l-2 border-dashed border-slate-100 space-y-10">
@@ -192,13 +208,13 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
             </div>
         </section>
 
-        {/* รายการหมวดงาน  */}
+        {/* รายการหมวดงาน */}
         <section className="space-y-4"><h2 className="font-black text-slate-800 px-2 text-lg uppercase tracking-wider font-sans">รายการหมวดงาน</h2>
             {project?.jobs?.map((job: any) => { const avgProg = job.job_tasks && job.job_tasks.length > 0 ? Math.round(job.job_tasks.reduce((s:number, t:any)=> s+(t.progress||0),0) / job.job_tasks.length) : 0;
                 return (<div key={job.documentId} className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 relative group transition-all hover:shadow-md"><div className="mb-4 pr-16"><h3 className="font-black text-slate-800 text-lg truncate font-sans">{job.title}</h3><div className="flex items-center gap-3 mt-3"><div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-50"><div className="h-full bg-blue-500 transition-all duration-1000 ease-out" style={{ width: `${avgProg}%` }}></div></div><span className="text-xl font-black text-blue-600 drop-shadow-sm">{avgProg}%</span></div></div>{canManage && <div className="absolute top-6 right-6 flex gap-1 opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => {setEditingJob(job); setIsEditOpen(true);}} className="p-2 text-slate-300 hover:text-blue-600"><Icons.Edit /></button><button onClick={(e) => handleDeleteJob(e, job.documentId, job.title)} className="p-2 text-slate-300 hover:text-red-500"><Icons.Trash /></button></div>}<Link href={`/manage/project/${projectId}/job/${job.documentId}`} className="flex items-center justify-between w-full bg-white border-2 border-red-100 hover:border-red-500 text-red-600 px-6 py-4 rounded-2xl text-sm font-black transition-all shadow-sm active:scale-[0.97] group"><span className="flex items-center gap-2">🔍 ดูรายการย่อย ({job.job_tasks?.length || 0})</span><span className="text-2xl group-hover:translate-x-1 transition-transform">→</span></Link></div>);})}
         </section>
 
-        {/* Site Diary (Infinite Scroll & Fix Duplicate Key)  */}
+        {/* Site Diary (Infinite Scroll & Duplicate Key Fixed) */}
         <section className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100 mb-20">
             <h2 className="font-black text-slate-800 mb-8 flex items-center gap-2 text-lg font-sans">📝 Site Diary <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full animate-pulse shadow-md shadow-red-200">Live</span></h2>
             <div className="relative pl-2 space-y-10">
@@ -229,24 +245,23 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
                         </div>
                     </div>
                 ))}
-                {loadingLogs && <div className="text-center py-4 text-xs text-slate-300 animate-pulse font-bold">กำลังโหลดข้อมูลเพิ่ม...</div>}
-                {!hasMoreLogs && siteLogs.length > 0 && <div className="text-center py-4 text-[10px] font-black text-slate-200 uppercase tracking-widest font-sans">สิ้นสุดบันทึก Site Diary</div>}
+                {loadingLogs && <div className="text-center py-4 text-xs text-slate-300 animate-pulse font-bold font-sans tracking-widest uppercase">Loading more logs...</div>}
+                {!hasMoreLogs && siteLogs.length > 0 && <div className="text-center py-4 text-[10px] font-black text-slate-200 uppercase tracking-widest font-sans">End of site diary</div>}
             </div>
         </section>
       </main>
 
-      {/* Floating Add Button */}
       {canManage && <button onClick={() => {setNewJobTitle(""); setIsCreateOpen(true);}} className="fixed bottom-8 right-6 w-16 h-16 bg-slate-900 text-white rounded-full shadow-2xl flex items-center justify-center text-4xl z-[999] active:scale-95 transition-transform font-light shadow-slate-900/40">+</button>}
       
       {/* Modals [Create/Edit/Member] */}
       {isCreateOpen && (
         <div className="fixed inset-0 bg-black/60 z-[1000] flex items-end sm:items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in slide-in-from-bottom-10">
-            <h3 className="font-black text-xl mb-6 text-slate-800 tracking-tight font-sans">🏗️ เพิ่มหมวดงานใหม่</h3>
+            <h3 className="font-black text-xl mb-6 text-slate-800 tracking-tight font-sans text-center">🏗️ เพิ่มหมวดงานใหม่</h3>
             <form onSubmit={handleCreateJob} className="space-y-4">
               <input type="text" placeholder="ชื่อหมวดงาน" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 outline-none font-black text-slate-700 focus:ring-2 focus:ring-blue-100" value={newJobTitle} onChange={e => setNewJobTitle(e.target.value)} autoFocus />
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setIsCreateOpen(false)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black uppercase text-xs tracking-widest">ยกเลิก</button>
+                <button type="button" onClick={() => setIsCreateOpen(false)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black uppercase text-xs tracking-widest shadow-sm">ยกเลิก</button>
                 <button type="submit" disabled={submitting} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl">สร้าง</button>
               </div>
             </form>
@@ -257,7 +272,7 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
       {isEditOpen && editingJob && (
         <div className="fixed inset-0 bg-black/50 z-[1000] flex items-end sm:items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95">
-            <h3 className="font-black text-xl mb-6 text-slate-800 font-sans">✏️ แก้ไขหมวดงาน</h3>
+            <h3 className="font-black text-xl mb-6 text-slate-800 font-sans text-center">✏️ แก้ไขหมวดงาน</h3>
             <form onSubmit={handleUpdateJob} className="space-y-4">
               <input type="text" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 outline-none font-black text-slate-700 focus:ring-2 focus:ring-blue-100" value={editingJob.title} onChange={e => setEditingJob({...editingJob, title: e.target.value})} />
               <div className="flex gap-3 pt-2">
@@ -274,9 +289,9 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in slide-in-from-bottom-10 h-[80vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6 sticky top-0 bg-white z-10 py-2">
               <h3 className="font-black text-xl text-slate-800 font-sans">{editingMember ? "✏️ แก้ไขข้อมูล" : "👷 มอบหมายงาน"}</h3>
-              <button onClick={() => setIsMemberModalOpen(false)} className="w-10 h-10 flex items-center justify-center bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors">✕</button>
+              <button onClick={() => setIsMemberModalOpen(false)} className="w-10 h-10 flex items-center justify-center bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors shadow-sm">✕</button>
             </div>
-            <form onSubmit={handleSaveMember} className="space-y-4 font-sans">
+            <form onSubmit={handleSaveMember} className="space-y-4 font-sans px-1">
               <div>
                 <label className="text-[10px] font-black text-slate-400 ml-1 mb-2 block uppercase tracking-widest">เลือกพนักงาน</label>
                 <select className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 text-sm font-black outline-none appearance-none" value={memberForm.userId} onChange={e => setMemberForm({...memberForm, userId: e.target.value})} required>
@@ -300,7 +315,7 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
               </div>
               <div>
                 <label className="text-[10px] font-black text-slate-400 ml-1 mb-2 block uppercase tracking-widest">ความรับผิดชอบ</label>
-                <textarea rows={3} className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 text-sm font-black outline-none resize-none" value={memberForm.responsibility} onChange={e => setMemberForm({...memberForm, responsibility: e.target.value})} placeholder="ระบุงานที่ต้องรับผิดชอบ..." />
+                <textarea rows={3} className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 text-sm font-black outline-none resize-none shadow-inner" value={memberForm.responsibility} onChange={e => setMemberForm({...memberForm, responsibility: e.target.value})} placeholder="ระบุงานที่ต้องรับผิดชอบ..." />
               </div>
               <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl mt-4 active:scale-95 transition-all shadow-slate-900/30">ยืนยันการมอบหมาย</button>
             </form>
