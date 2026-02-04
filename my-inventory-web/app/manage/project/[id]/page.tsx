@@ -32,18 +32,11 @@ const getUserColor = (name: string) => {
     return themes[sum % themes.length];
 };
 
-const getDayTheme = (index: number) => {
-    const themes = [
-        { dot: "bg-blue-500", border: "border-blue-200", bg: "bg-blue-50/50", text: "text-blue-700" },
-        { dot: "bg-rose-500", border: "border-rose-200", bg: "bg-rose-50/50", text: "text-rose-700" },
-    ];
-    return themes[index % themes.length];
-};
-
 const Icons = {
   AddUser: () => (<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" /></svg>),
   Trash: () => (<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg>),
   Edit: () => (<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" /></svg>),
+  Copy: () => (<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375a1.125 1.125 0 0 1-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75" /></svg>),
 };
 
 export default function ProjectDashboardPage({ params }: { params: Promise<{ id: string }> }) {
@@ -72,6 +65,75 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
   const isAdmin = user?.role?.name === 'Admin' || user?.role?.type === 'admin';
   const isOwner = !!user && !!project?.creator && project.creator.id === user.id;
   const canManage = !!user && (isAdmin || isOwner);
+
+  // ✅ 1. คำนวณ Progress แบบ Double Average เพื่อใช้ในรายงาน
+  const totalProjProgress = useMemo(() => {
+    if (!project?.jobs || project.jobs.length === 0) return 0;
+    const jobAverages = project.jobs.map((job: any) => {
+        if (!job.job_tasks || job.job_tasks.length === 0) return job.progress || 0;
+        return job.job_tasks.reduce((s: number, t: any) => s + (t.progress || 0), 0) / job.job_tasks.length;
+    });
+    return Math.round(jobAverages.reduce((sum: number, avg: number) => sum + avg, 0) / project.jobs.length);
+  }, [project?.jobs]);
+
+  // ✅ 2. ฟังก์ชันเจนรายงานแบบละเอียด (ฉบับดึงรายการงานย่อยครบถ้วน)
+  const generateSummaryText = () => {
+    if (!project) return "";
+    
+    let text = `=============================\n`;
+    text += `📅 รายงานความคืบหน้าประจำวัน\n`;
+    text += `----------------------------\n`;
+    text += `🏠 โครงการ: ${project.name}\n`;
+    text += `📍 พิกัด: ${project.location || '-'} (ห่างจากโรงงาน ${project.distance_from_branch || 0} กม.)\n\n`;
+    
+    text += `📊 ภาพรวมโครงการ\n`;
+    const startDate = project.start_date ? new Date(project.start_date).toLocaleDateString('th-TH') : '---';
+    const endDate = project.end_date ? new Date(project.end_date).toLocaleDateString('th-TH') : '---';
+    text += `• แผน: ${startDate} - ${endDate}\n`;
+    text += `• สถานะภาพรวม: ${totalProjProgress >= 50 ? '✅' : '🚧'} ดำเนินงานแล้ว ${totalProjProgress}%\n\n`;
+
+    text += `🏗️ รายละเอียดงาน\n`;
+    
+    // วนลูป Job และ Task ย่อย เพื่อสร้างรายการ
+    project.jobs?.forEach((job: any, index: number) => {
+        const jobProg = job.job_tasks && job.job_tasks.length > 0 
+           ? Math.round(job.job_tasks.reduce((s:number, t:any)=> s+(t.progress||0),0) / job.job_tasks.length) 
+           : 0;
+        
+        text += `${index + 1}. ${job.title} (${jobProg}%)\n`;
+        
+        // เรียงลำดับ Task ตามชื่อแบบ Numeric (1., 2., 3.)
+        const sortedTasks = [...(job.job_tasks || [])].sort((a,b) => (a.task_name || "").localeCompare((b.task_name || ""), 'th', {numeric:true}));
+        
+        sortedTasks.forEach((task: any) => {
+            let statusIcon = '⏳'; // รอเริ่ม
+            if (task.progress === 100) statusIcon = '✅'; // เสร็จ
+            else if (task.progress > 0) statusIcon = '🚧'; // กำลังทำ
+            
+            text += `   ${statusIcon} ${task.task_name}: ${task.progress || 0}%\n`;
+        });
+    });
+
+    text += `\n----------------------------\n`;
+    text += `🔗 ดูรายละเอียด/รูปภาพ:\n`;
+    text += `https://siriwong.online/manage/project/${projectId}\n\n`;
+    text += `(สำหรับผู้ที่ยังไม่มี Account)\n`;
+    text += `👤 User: siriwong\n`;
+    text += `🔑 Pass: 123456\n`;
+    text += `=============================`;
+    
+    return text;
+  };
+
+  const handleShareToLine = () => {
+    const text = generateSummaryText();
+    window.open(`https://line.me/R/msg/text/?${encodeURIComponent(text)}`, '_blank');
+  };
+
+  const handleCopyToClipboard = () => {
+    const text = generateSummaryText();
+    navigator.clipboard.writeText(text).then(() => alert("คัดลอกรายงานสรุปงานแล้ว! ไปวางใน LINE ได้เลยครับ (ชุดข้อมูลเต็ม)"));
+  };
 
   const loadProjectData = async () => {
     try {
@@ -124,46 +186,98 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
   const handleSaveMember = async (e: any) => { e.preventDefault(); try { if (editingMember) await updateProjectMember(editingMember.documentId, memberForm); else await addProjectMember({ projectSiteId: projectId, ...memberForm }); setIsMemberModalOpen(false); loadProjectData(); } catch (err) { alert("ล้มเหลว"); } };
   const handleDeleteMember = async (id: string) => { if(confirm("ลบสมาชิก?")) { await deleteProjectMember(id); loadProjectData(); } };
 
-  if (loading && !project) return <div className="h-screen flex items-center justify-center text-slate-400">Loading...</div>;
+  if (loading && !project) return <div className="h-screen flex items-center justify-center text-slate-400 font-bold">กำลังโหลดข้อมูล...</div>;
 
   return (
     <div className="min-h-screen bg-slate-50 pb-32 font-sans relative">
-      <div className="bg-slate-900 text-white rounded-b-[2.5rem] p-6 pb-14 shadow-xl relative overflow-hidden">
-        <div className="relative z-10">
-            <Link href="/manage" className="text-slate-400 text-xs mb-2 block">← กลับหน้ารวม</Link>
-            <h1 className="text-2xl font-bold">{project?.name}</h1>
-            <p className="text-sm text-slate-300 mt-1">📍 {project?.location || "ไม่ระบุที่ตั้ง"}</p>
+      <div className="bg-slate-900 text-white rounded-b-[3rem] p-6 pb-20 shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 rounded-full blur-3xl -mr-20 -mt-20"></div>
+        <div className="relative z-10 max-w-md mx-auto">
+            <div className="flex justify-between items-start mb-6">
+                <Link href="/manage" className="text-white/40 text-xs flex items-center gap-1 bg-white/5 px-3 py-1.5 rounded-full backdrop-blur-md">← กลับ</Link>
+                <div className="flex gap-2">
+                    {/* ✅ ปุ่ม Copy รายงานละเอียด */}
+                    <button onClick={handleCopyToClipboard} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-full shadow-lg transition-transform active:scale-90" title="คัดลอกรายงานละเอียด">
+                       <Icons.Copy />
+                    </button>
+                    {/* ✅ ปุ่มแชร์ตรงเข้า LINE */}
+                    <button onClick={handleShareToLine} className="bg-[#06C755] hover:bg-[#05b54d] text-white px-5 py-2.5 rounded-full text-[10px] font-black flex items-center gap-2 shadow-lg transition-transform active:scale-95 uppercase tracking-tighter">
+                       <span>LINE</span> แชร์สรุปงาน
+                    </button>
+                </div>
+            </div>
+
+            <div className="flex items-center gap-2 mb-2">
+                <span className="bg-amber-500 text-black text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider shadow-sm">On-Going</span>
+                <span className="text-[9px] text-white/40 font-bold uppercase tracking-widest">Project #{project?.id}</span>
+            </div>
+            <h1 className="text-3xl font-black mb-1 leading-tight">{project?.name}</h1>
+            <p className="text-sm text-slate-400 flex items-center gap-1 mb-8 tracking-tight font-bold">📍 {project?.location}</p>
+
+            <div className="grid grid-cols-2 gap-4 mb-8">
+                <div className="bg-white/5 backdrop-blur-xl p-5 rounded-[2rem] border border-white/10 shadow-inner">
+                    <div className="flex justify-between items-center mb-1">
+                        <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">ระยะทาง</span>
+                        <Link href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(project?.coordinates || project?.location)}`} target="_blank" className="text-[8px] bg-blue-600 text-white px-2 py-0.5 rounded-full font-bold">MAP ↗</Link>
+                    </div>
+                    <p className="text-2xl font-black">{project?.distance_from_branch || "0"} <span className="text-xs text-white/40 font-bold">กม.</span></p>
+                </div>
+                <div className="bg-white/5 backdrop-blur-xl p-5 rounded-[2rem] border border-white/10 shadow-inner">
+                    <span className="text-[10px] font-black text-white/40 uppercase tracking-widest block mb-1">แผนงาน</span>
+                    <p className="text-[11px] font-black leading-tight">
+                        {project?.start_date ? new Date(project.start_date).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'}) : "---"} -<br/>
+                        {project?.end_date ? new Date(project.end_date).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'}) : "---"}
+                    </p>
+                </div>
+            </div>
+
+            <div className="px-1">
+                <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] block mb-3 font-bold">Project Team Summary</span>
+                <div className="flex -space-x-3">
+                    {members.map((m, idx) => {
+                        const theme = getUserColor(m.user?.username || "");
+                        return (
+                            <div key={idx} className={`h-10 w-10 rounded-2xl ring-4 ring-slate-900 overflow-hidden ${theme.avatar} shadow-lg transition-transform hover:-translate-y-1`}>
+                                {m.user?.avatar?.url ? 
+                                    <img src={m.user.avatar.url.startsWith('http') ? m.user.avatar.url : `${STRAPI_URL}${m.user.avatar.url}`} className="h-full w-full object-cover" /> 
+                                    : <div className="h-full w-full flex items-center justify-center text-xs font-bold text-white">{m.user?.username?.charAt(0).toUpperCase()}</div>
+                                }
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
         </div>
       </div>
 
       <main className="max-w-md mx-auto px-4 -mt-8 relative z-20 space-y-6">
-        {/* 1. Timeline ทีมงาน */}
-        <section className="bg-white rounded-[2rem] p-5 shadow-sm border border-slate-100">
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="font-bold text-slate-800 text-base">👷 Timeline ทีมงาน</h2>
-                {canManage && <button onClick={() => { setEditingMember(null); setMemberForm({ userId: "", role: "", responsibility: "", start_date: "", end_date: "" }); setIsMemberModalOpen(true); }} className="text-[10px] bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full font-bold hover:bg-blue-100 flex items-center gap-1 active:scale-95 transition"><Icons.AddUser /> เพิ่ม/มอบหมาย</button>}
+        {/* Timeline ทีมงาน */}
+        <section className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100">
+            <div className="flex justify-between items-center mb-8">
+                <h2 className="font-black text-slate-800 text-base">👷 Timeline ทีมงาน</h2>
+                {canManage && <button onClick={() => { setEditingMember(null); setMemberForm({ userId: "", role: "", responsibility: "", start_date: "", end_date: "" }); setIsMemberModalOpen(true); }} className="text-[10px] bg-blue-50 text-blue-600 px-4 py-2 rounded-full font-black shadow-sm tracking-tight">+ เพิ่มพนักงาน</button>}
             </div>
-            <div className="relative pl-4 border-l-2 border-dashed border-slate-200 space-y-8">
+            <div className="relative pl-4 border-l-2 border-dashed border-slate-100 space-y-10">
                 {members.map((m: any) => {
                     const theme = getUserColor(m.user?.username || "");
                     const isActive = !m.end_date || new Date(m.end_date) >= new Date();
                     return (
-                        <div key={m.id} className="relative pl-8">
-                            <div className={`absolute -left-[25px] top-0 w-5 h-5 rounded-full border-4 border-white shadow-sm z-10 ${isActive ? 'bg-blue-500' : 'bg-slate-300'}`}></div>
-                            <div className="flex items-center gap-2 mb-2 -mt-1">
-                                <span className={`text-[10px] font-bold ${isActive ? 'text-blue-600' : 'text-slate-400'}`}>{new Date(m.start_date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}</span>
-                                {isActive && <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-md font-bold border border-green-200">Active Now</span>}
+                        <div key={m.id} className="relative pl-10">
+                            <div className={`absolute -left-[27px] top-0 w-6 h-6 rounded-full border-4 border-white shadow-md z-10 ${isActive ? 'bg-blue-500' : 'bg-slate-200'}`}></div>
+                            <div className="flex items-center gap-2 mb-3 -mt-1">
+                                <span className="text-[10px] font-black text-blue-600 uppercase tracking-tighter">{new Date(m.start_date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}</span>
+                                {isActive && <span className="text-[9px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-black border border-emerald-100">Active Now</span>}
                             </div>
-                            <div className={`relative group p-4 rounded-2xl border shadow-sm flex items-start gap-3 transition-all hover:shadow-md ${isActive ? `bg-white ${theme.border}` : 'bg-slate-50 border-slate-200 opacity-70'}`}>
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 overflow-hidden ${theme.avatar} ring-[3px] ring-offset-2 ${theme.glow}`}>
-                                    {m.user?.avatar?.url ? <img src={m.user.avatar.url.startsWith('http') ? m.user.avatar.url : `${STRAPI_URL}${m.user.avatar.url}`} className="w-full h-full object-cover" /> : <span>{m.user?.username?.charAt(0).toUpperCase()}</span>}
+                            <div className={`relative group p-5 rounded-[2rem] border shadow-sm flex items-start gap-4 transition-all hover:shadow-lg ${isActive ? `bg-white ${theme.border}` : 'bg-slate-50 opacity-60'}`}>
+                                <div className={`w-12 h-12 overflow-hidden rounded-2xl flex items-center justify-center text-white font-black text-lg shadow-inner ${theme.avatar} ring-4 ring-offset-2 ${isActive ? theme.glow : ''}`}>
+                                    {m.user?.avatar?.url ? <img className="h-full w-full object-cover" src={m.user.avatar.url.startsWith('http') ? m.user.avatar.url : `${STRAPI_URL}${m.user.avatar.url}`} className="h-full w-full object-cover" /> : <span>{m.user?.username?.charAt(0).toUpperCase()}</span>}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <div className="flex justify-between items-start">
-                                        <div><p className={`font-bold text-sm ${isActive ? theme.text : 'text-slate-600'}`}>{m.user?.username || "Unknown"}</p><p className="text-[10px] text-slate-500">{m.role_in_project}</p></div>
-                                        {canManage && (<div className="flex gap-1 opacity-0 group-hover:opacity-100 transition"><button onClick={() => {setEditingMember(m); setMemberForm({userId: m.user.id, role: m.role_in_project, responsibility: m.responsibility, start_date: m.start_date, end_date: m.end_date}); setIsMemberModalOpen(true);}} className="text-slate-300 hover:text-blue-500"><Icons.Edit /></button><button onClick={() => handleDeleteMember(m.documentId)} className="text-slate-300 hover:text-red-500"><Icons.Trash /></button></div>)}
+                                    <div className="flex justify-between">
+                                        <div><p className={`font-black text-base ${isActive ? theme.text : 'text-slate-700'}`}>{m.user?.username}</p><p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{m.role_in_project}</p></div>
+                                        {canManage && (<div className="flex gap-1 opacity-0 group-hover:opacity-100 transition"><button onClick={() => {setEditingMember(m); setMemberForm({userId: m.user.id, role: m.role_in_project, responsibility: m.responsibility, start_date: m.start_date, end_date: m.end_date}); setIsMemberModalOpen(true);}} className="text-slate-300 hover:text-blue-500 p-1"><Icons.Edit /></button><button onClick={() => handleDeleteMember(m.documentId)} className="text-slate-300 hover:text-red-500 p-1"><Icons.Trash /></button></div>)}
                                     </div>
-                                    {m.responsibility && <p className="mt-2 text-[10px] text-slate-600 italic">"{m.responsibility}"</p>}
+                                    {m.responsibility && <p className="mt-3 text-[10px] text-slate-600 italic font-bold leading-relaxed border-t border-slate-50 pt-2">"{m.responsibility}"</p>}
                                 </div>
                             </div>
                         </div>
@@ -172,72 +286,62 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
             </div>
         </section>
 
-        {/* 2. รายการหมวดงาน (ปรับให้ตัวเลข Progress ใหญ่ขึ้นชัดเจน) */}
+        {/* รายการหมวดงาน */}
         <section className="space-y-4">
-            <h2 className="font-bold text-slate-800 px-2">รายการหมวดงาน</h2>
+            <h2 className="font-black text-slate-800 px-2 text-lg uppercase tracking-wider">รายการหมวดงาน</h2>
             {project?.jobs?.map((job: any) => {
-                // ✅ คำนวณค่าเฉลี่ย Progress จาก Task ลูกๆ ของ Job นี้
                 const avgProg = job.job_tasks && job.job_tasks.length > 0 
                    ? Math.round(job.job_tasks.reduce((s:number, t:any)=> s+(t.progress||0),0) / job.job_tasks.length) 
                    : 0;
-
                 return (
-                <div key={job.id} className="bg-white p-5 rounded-[2rem] shadow-sm border border-slate-100 relative group">
+                <div key={job.id} className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 relative group transition-all hover:shadow-md">
                     <div className="mb-4 pr-16">
-                        <h3 className="font-bold text-slate-800 truncate">{job.title}</h3>
-                        <div className="flex items-center gap-3 mt-2">
-                            <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                                <div className="h-full bg-blue-500 transition-all duration-700" style={{ width: `${avgProg}%` }}></div>
-                            </div>
-                            {/* ✅ ปรับตัวเลข Progress ให้ตัวใหญ่ชัดเจน (lg font-black) */}
-                            <span className="text-lg font-black text-blue-600 drop-shadow-sm">{avgProg}%</span>
+                        <h3 className="font-black text-slate-800 text-lg truncate">{job.title}</h3>
+                        <div className="flex items-center gap-3 mt-3">
+                            <div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-50"><div className="h-full bg-blue-500 transition-all duration-1000 ease-out" style={{ width: `${avgProg}%` }}></div></div>
+                            <span className="text-xl font-black text-blue-600 drop-shadow-sm">{avgProg}%</span>
                         </div>
                     </div>
-                    {canManage && <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition"><button onClick={() => {setEditingJob(job); setIsEditOpen(true);}} className="p-2 text-slate-300 hover:text-blue-500">✎</button><button onClick={(e) => handleDeleteJob(e, job.documentId, job.title)} className="p-2 text-slate-300 hover:text-red-500">🗑</button></div>}
-                    <Link href={`/manage/project/${projectId}/job/${job.documentId}`} className="flex items-center justify-between w-full bg-white border-2 border-red-100 hover:border-red-400 text-red-600 px-5 py-4 rounded-2xl text-sm font-bold transition-all shadow-sm active:scale-[0.97] group">
+                    {canManage && <div className="absolute top-6 right-6 flex gap-1 opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => {setEditingJob(job); setIsEditOpen(true);}} className="p-2 text-slate-300 hover:text-blue-600"><Icons.Edit /></button><button onClick={(e) => handleDeleteJob(e, job.documentId, job.title)} className="p-2 text-slate-300 hover:text-red-600"><Icons.Trash /></button></div>}
+                    <Link href={`/manage/project/${projectId}/job/${job.documentId}`} className="flex items-center justify-between w-full bg-white border-2 border-red-100 hover:border-red-500 text-red-600 px-6 py-4 rounded-2xl text-sm font-black transition-all shadow-sm active:scale-[0.97] group">
                         <span className="flex items-center gap-2">🔍 ดูรายการย่อย ({job.job_tasks?.length || 0})</span>
-                        <span className="text-xl">→</span>
+                        <span className="text-2xl group-hover:translate-x-1 transition-transform">→</span>
                     </Link>
                 </div>
               );
             })}
         </section>
 
-        {/* 3. Site Diary (เพิ่มแสดง Progress ของ Task นั้นๆ) */}
-        <section className="bg-white rounded-[2rem] p-5 shadow-sm border border-slate-100">
-            <h2 className="font-bold text-slate-800 mb-6 flex items-center gap-2">📝 Site Diary <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full animate-pulse">Live</span></h2>
-            <div className="relative pl-2 space-y-8">
+        {/* Site Diary */}
+        <section className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100 mb-20">
+            <h2 className="font-black text-slate-800 mb-8 flex items-center gap-2 text-lg">📝 Site Diary <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full animate-pulse shadow-md shadow-red-200">Live</span></h2>
+            <div className="relative pl-2 space-y-10">
                 {groupedLogs.map(([dateKey, logs]) => (
                     <div key={dateKey}>
-                        <div className="flex items-center gap-2 mb-4"><div className="w-3 h-3 rounded-full bg-blue-500"></div><span className="text-xs font-bold text-slate-600">{dateKey}</span></div>
-                        <div className="space-y-3 ml-4">
+                        <div className="flex items-center gap-2 mb-5">
+                            <div className="w-3 h-3 rounded-full bg-blue-500 ring-4 ring-blue-50 shrink-0"></div>
+                            <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{dateKey}</span>
+                        </div>
+                        <div className="space-y-4 ml-4">
                             {logs.map((log: any) => {
                                 const isDefect = log.Log_Type === 'Defect';
                                 const hasMedia = log.Media && log.Media.length > 0;
-                                // ✅ ดึง Progress ปัจจุบันของ Task นี้ (ถ้ามี populate มาให้)
-                                const taskProgress = log.job_task?.progress || 0;
-
                                 return (
-                                    <Link key={log.documentId} href={`/manage/project/${projectId}/job/${log.jobId}/task/${log.taskId}`} className={`block p-4 rounded-2xl border transition-all ${isDefect ? 'bg-red-50 border-red-200 shadow-sm' : 'bg-white border-slate-100 hover:shadow-md'}`}>
-                                        <div className="flex gap-3">
+                                    <Link key={log.documentId} href={`/manage/project/${projectId}/job/${log.jobId}/task/${log.taskId}`} className={`block p-5 rounded-[2rem] border transition-all ${isDefect ? 'bg-red-50 border-red-200 shadow-inner' : 'bg-white border-slate-100 hover:shadow-xl hover:shadow-slate-200/50'}`}>
+                                        <div className="flex gap-4">
                                             {hasMedia ? (
-                                                <div className="w-12 h-12 rounded-xl bg-slate-100 shrink-0 overflow-hidden border border-slate-100">
-                                                    <img src={log.Media[0].url.startsWith('http') ? log.Media[0].url : `${STRAPI_URL}${log.Media[0].url}`} className="w-full h-full object-cover" />
-                                                </div>
+                                                <div className="w-16 h-16 rounded-2xl bg-slate-100 shrink-0 overflow-hidden border border-slate-100 shadow-sm"><img src={log.Media[0].url.startsWith('http') ? log.Media[0].url : `${STRAPI_URL}${log.Media[0].url}`} className="w-full h-full object-cover" /></div>
                                             ) : (
-                                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 text-lg ${isDefect ? 'bg-red-100 text-red-600' : 'bg-slate-50 text-slate-500'}`}>
-                                                    {isDefect ? "🚨" : (log.Log_Type === 'Progress' ? "📈" : "📝")}
-                                                </div>
+                                                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 text-2xl ${isDefect ? 'bg-red-100 text-red-600' : 'bg-slate-50 text-slate-500 shadow-inner'}`}>{isDefect ? "🚨" : (log.Log_Type === 'Progress' ? "📈" : "📝")}</div>
                                             )}
                                             <div className="flex-1 min-w-0">
-                                                <div className="flex justify-between items-start">
-                                                   {/* ✅ เพิ่มสถานะ Progress ปัจจุบัน (เช่น: 50%) ต่อท้ายชื่อ Task */}
-                                                   <h4 className={`text-xs font-bold truncate ${isDefect ? 'text-red-700' : 'text-slate-700'}`}>
-                                                      {log.taskName} <span className="text-[10px] text-blue-500 font-normal">({log.progress_percentage || 0}%)</span>
+                                                <div className="flex justify-between items-start mb-1.5">
+                                                   <h4 className={`text-sm font-black truncate leading-tight ${isDefect ? 'text-red-700' : 'text-slate-800'}`}>
+                                                      {log.taskName} <span className="text-[10px] text-blue-600 font-black ml-1.5 bg-blue-50 px-1.5 py-0.5 rounded shadow-sm">({log.progress_percentage || 0}%)</span>
                                                    </h4>
-                                                   <span className="text-[9px] text-slate-400">{new Date(log.action_date || log.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</span>
+                                                   <span className="text-[9px] font-black text-slate-400 uppercase">{new Date(log.action_date || log.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</span>
                                                 </div>
-                                                <p className={`text-[10px] truncate mt-1 ${isDefect ? 'text-red-600 font-medium' : 'text-slate-500'}`}>{log.Description}</p>
+                                                <p className={`text-[11px] truncate-2-lines leading-relaxed font-bold ${isDefect ? 'text-red-600' : 'text-slate-500'}`}>{log.Description}</p>
                                             </div>
                                         </div>
                                     </Link>
@@ -251,18 +355,18 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
       </main>
 
       {/* Floating Add Button */}
-      {canManage && <button onClick={() => {setNewJobTitle(""); setIsCreateOpen(true);}} className="fixed bottom-8 right-6 w-14 h-14 bg-slate-900 text-white rounded-full shadow-xl flex items-center justify-center text-3xl z-[999]">+</button>}
+      {canManage && <button onClick={() => {setNewJobTitle(""); setIsCreateOpen(true);}} className="fixed bottom-8 right-6 w-16 h-16 bg-slate-900 text-white rounded-full shadow-2xl flex items-center justify-center text-4xl z-[999] active:scale-95 transition-transform font-light shadow-slate-900/40">+</button>}
       
-      {/* Create Job Modal */}
+      {/* Modals [Create/Edit/Member] */}
       {isCreateOpen && (
         <div className="fixed inset-0 bg-black/60 z-[1000] flex items-end sm:items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-in slide-in-from-bottom-10">
-            <h3 className="font-bold text-lg mb-4 text-slate-800">🏗️ เพิ่มหมวดงานใหม่</h3>
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in slide-in-from-bottom-10">
+            <h3 className="font-black text-xl mb-6 text-slate-800 tracking-tight">🏗️ เพิ่มหมวดงานใหม่</h3>
             <form onSubmit={handleCreateJob} className="space-y-4">
-              <input type="text" placeholder="ชื่อหมวดงาน" className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none" value={newJobTitle} onChange={e => setNewJobTitle(e.target.value)} autoFocus />
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setIsCreateOpen(false)} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold">ยกเลิก</button>
-                <button type="submit" disabled={submitting} className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-bold">สร้าง</button>
+              <input type="text" placeholder="ชื่อหมวดงาน" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 outline-none font-black text-slate-700 focus:ring-2 focus:ring-blue-100" value={newJobTitle} onChange={e => setNewJobTitle(e.target.value)} autoFocus />
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setIsCreateOpen(false)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black uppercase text-xs tracking-widest">ยกเลิก</button>
+                <button type="submit" disabled={submitting} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl">สร้าง</button>
               </div>
             </form>
           </div>
@@ -271,13 +375,13 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
 
       {isEditOpen && editingJob && (
         <div className="fixed inset-0 bg-black/50 z-[1000] flex items-end sm:items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl">
-            <h3 className="font-bold text-lg mb-4 text-slate-800">✏️ แก้ไขหมวดงาน</h3>
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95">
+            <h3 className="font-black text-xl mb-6 text-slate-800">✏️ แก้ไขหมวดงาน</h3>
             <form onSubmit={handleUpdateJob} className="space-y-4">
-              <input type="text" className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none" value={editingJob.title} onChange={e => setEditingJob({...editingJob, title: e.target.value})} />
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setIsEditOpen(false)} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold">ยกเลิก</button>
-                <button type="submit" className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-bold">บันทึก</button>
+              <input type="text" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 outline-none font-black text-slate-700 focus:ring-2 focus:ring-blue-100" value={editingJob.title} onChange={e => setEditingJob({...editingJob, title: e.target.value})} />
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setIsEditOpen(false)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black uppercase text-xs">ยกเลิก</button>
+                <button type="submit" className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs shadow-xl">บันทึก</button>
               </div>
             </form>
           </div>
@@ -286,38 +390,38 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
 
       {isMemberModalOpen && (
         <div className="fixed inset-0 bg-black/60 z-[1000] flex items-end sm:items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-in slide-in-from-bottom-10 h-[80vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-lg text-slate-800">{editingMember ? "✏️ แก้ไขข้อมูล" : "👷 มอบหมายงาน"}</h3>
-              <button onClick={() => setIsMemberModalOpen(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in slide-in-from-bottom-10 h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6 sticky top-0 bg-white z-10 py-2">
+              <h3 className="font-black text-xl text-slate-800">{editingMember ? "✏️ แก้ไขข้อมูล" : "👷 มอบหมายงาน"}</h3>
+              <button onClick={() => setIsMemberModalOpen(false)} className="w-10 h-10 flex items-center justify-center bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors">✕</button>
             </div>
-            <form onSubmit={handleSaveMember} className="space-y-3">
+            <form onSubmit={handleSaveMember} className="space-y-4">
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">เลือกพนักงาน</label>
-                <select className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none font-bold" value={memberForm.userId} onChange={e => setMemberForm({...memberForm, userId: e.target.value})} required>
+                <label className="text-[10px] font-black text-slate-400 ml-1 mb-2 block uppercase tracking-widest">เลือกพนักงาน</label>
+                <select className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 text-sm font-black outline-none appearance-none" value={memberForm.userId} onChange={e => setMemberForm({...memberForm, userId: e.target.value})} required>
                   <option value="" disabled>-- เลือกรายชื่อ --</option>
-                  {users.map(u => (<option key={u.id} value={u.id}>{u.username} ({u.position || "ไม่ระบุ"})</option>))}
+                  {users.map(u => (<option key={u.id} value={u.id}>{u.username} ({u.position || "พนักงาน"})</option>))}
                 </select>
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">หน้าที่</label>
-                <input className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none font-bold" value={memberForm.role} onChange={e => setMemberForm({...memberForm, role: e.target.value})} required />
+                <label className="text-[10px] font-black text-slate-400 ml-1 mb-2 block uppercase tracking-widest">หน้าที่ในไซต์นี้</label>
+                <input className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 text-sm font-black outline-none" value={memberForm.role} onChange={e => setMemberForm({...memberForm, role: e.target.value})} required placeholder="เช่น หัวหน้าทีมติดตั้ง" />
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-3">
                 <div className="flex-1">
-                  <label className="text-xs font-bold text-slate-500 ml-1">เริ่ม</label>
-                  <input type="date" className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none font-bold" value={memberForm.start_date} onChange={e => setMemberForm({...memberForm, start_date: e.target.value})} required />
+                  <label className="text-[10px] font-black text-slate-400 ml-1 mb-2 block uppercase tracking-widest">เริ่ม</label>
+                  <input type="date" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 text-sm font-black outline-none" value={memberForm.start_date} onChange={e => setMemberForm({...memberForm, start_date: e.target.value})} required />
                 </div>
                 <div className="flex-1">
-                  <label className="text-xs font-bold text-slate-500 ml-1">ถึง (ถ้ามี)</label>
-                  <input type="date" className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none font-bold" value={memberForm.end_date} onChange={e => setMemberForm({...memberForm, end_date: e.target.value})} />
+                  <label className="text-[10px] font-black text-slate-400 ml-1 mb-2 block uppercase tracking-widest">ถึง (ถ้ามี)</label>
+                  <input type="date" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 text-sm font-black outline-none" value={memberForm.end_date} onChange={e => setMemberForm({...memberForm, end_date: e.target.value})} />
                 </div>
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">รายละเอียด</label>
-                <textarea rows={3} className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none resize-none font-bold" value={memberForm.responsibility} onChange={e => setMemberForm({...memberForm, responsibility: e.target.value})} />
+                <label className="text-[10px] font-black text-slate-400 ml-1 mb-2 block uppercase tracking-widest">ความรับผิดชอบ</label>
+                <textarea rows={3} className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 text-sm font-black outline-none resize-none" value={memberForm.responsibility} onChange={e => setMemberForm({...memberForm, responsibility: e.target.value})} placeholder="ระบุงานที่ต้องรับผิดชอบ..." />
               </div>
-              <button type="submit" className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg mt-2">{editingMember ? "บันทึกการแก้ไข" : "บันทึก"}</button>
+              <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl mt-4 active:scale-95 transition-all shadow-slate-900/30">ยืนยันการมอบหมาย</button>
             </form>
           </div>
         </div>
