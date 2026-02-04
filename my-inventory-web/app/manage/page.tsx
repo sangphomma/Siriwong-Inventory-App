@@ -208,12 +208,11 @@ export default function ManageProjectsPage() {
 
              // ✅ คำนวณ Double Average Progress แบบแม่นยำ 100%
              const projProgress = p.jobs && p.jobs.length > 0 
-                ? Math.round(p.jobs.map((job: any) => {
-                    if (!job.job_tasks || job.job_tasks.length === 0) return job.progress || 0;
-                    return job.job_tasks.reduce((s: number, t: any) => s + (t.progress || 0), 0) / job.job_tasks.length;
-                  }).reduce((sum, avg) => sum + avg, 0) / p.jobs.length)
-                : 0;
-
+   ? Math.round(p.jobs.map((job: any) => {
+       if (!job.job_tasks || job.job_tasks.length === 0) return job.progress || 0;
+       return job.job_tasks.reduce((s: number, t: any) => s + (t.progress || 0), 0) / job.job_tasks.length;
+     }).reduce((sum: number, avg: number) => sum + avg, 0) / p.jobs.length) // ✅ ระบุ : number เข้าไปทั้งสองตัว
+   : 0;
              return (
               <Link href={`/manage/project/${p.documentId}`} key={p.id} className="group block bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-all relative">
                  <div className="p-6 flex justify-between items-center">
