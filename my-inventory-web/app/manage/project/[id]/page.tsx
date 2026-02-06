@@ -18,7 +18,12 @@ import {
   fetchProjectLogs 
 } from "@/services/api"; 
 
+// ✅ Import Components ที่เราเพิ่งสร้าง
+import ProjectHeader from "./components/ProjectHeader";
+import ReportModal from "./components/ReportModal";
+
 // --- Helper Functions ---
+// ยังคงไว้สำหรับ Timeline Section ในหน้านี้
 const getUserColor = (name: string) => {
     if (!name) return { bg: "bg-slate-100", text: "text-slate-600", avatar: "bg-slate-500", border: "border-slate-300", glow: "ring-slate-200 shadow-slate-300" };
     const themes = [
@@ -32,11 +37,10 @@ const getUserColor = (name: string) => {
     return themes[sum % themes.length];
 };
 
+// เหลือแค่ Icon ที่จำเป็นสำหรับหน้านี้ (Edit/Trash) ส่วน Report/Map ย้ายไปแล้ว
 const Icons = {
-  AddUser: () => (<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" /></svg>),
   Trash: () => (<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg>),
   Edit: () => (<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" /></svg>),
-  Copy: () => (<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375a1.125 1.125 0 0 1-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75" /></svg>),
 };
 
 export default function ProjectDashboardPage({ params }: { params: Promise<{ id: string }> }) {
@@ -53,6 +57,7 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
   const [loadingLogs, setLoadingLogs] = useState(false);
   const observer = useRef<IntersectionObserver | null>(null);
 
+  // Modals & States
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newJobTitle, setNewJobTitle] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -61,59 +66,15 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<any>(null);
   const [memberForm, setMemberForm] = useState({ userId: "", role: "", responsibility: "", start_date: "", end_date: "" });
+  
+  // Report Modal State
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   const isAdmin = user?.role?.name === 'Admin' || user?.role?.type === 'admin';
   const isOwner = !!user && !!project?.creator && project.creator.id === user.id;
   const canManage = !!user && (isAdmin || isOwner);
 
-  // ✅ 1. Progress Double Average
-  const totalProjProgress = useMemo(() => {
-    if (!project?.jobs || project.jobs.length === 0) return 0;
-    const jobAverages = project.jobs.map((job: any) => {
-        if (!job.job_tasks || job.job_tasks.length === 0) return job.progress || 0;
-        return job.job_tasks.reduce((s: number, t: any) => s + (t.progress || 0), 0) / job.job_tasks.length;
-    });
-    return Math.round(jobAverages.reduce((sum: number, avg: number) => sum + avg, 0) / project.jobs.length);
-  }, [project?.jobs]);
-
-  // ✅ 2. ฟังก์ชันเจนรายงานละเอียด (กู้คืน Logic Emoji ครบถ้วน) 
-  const generateSummaryText = () => {
-    if (!project) return "";
-    let text = `=============================\n📅 รายงานความคืบหน้าประจำวัน\n----------------------------\n🏠 โครงการ: ${project.name}\n📍 พิกัด: ${project.location || '-'} (ห่างจากโรงงาน ${project.distance_from_branch || 0} กม.)\n\n📊 ภาพรวมโครงการ\n`;
-    const startDate = project.start_date ? new Date(project.start_date).toLocaleDateString('th-TH') : '---';
-    const endDate = project.end_date ? new Date(project.end_date).toLocaleDateString('th-TH') : '---';
-    text += `• แผน: ${startDate} - ${endDate}\n• สถานะภาพรวม: ${totalProjProgress >= 80 ? '✅' : '🚧'} ดำเนินงานแล้ว ${totalProjProgress}%\n\n🏗️ รายละเอียดงาน\n`;
-    project.jobs?.forEach((job: any, index: number) => {
-        const jobProg = job.job_tasks && job.job_tasks.length > 0 ? Math.round(job.job_tasks.reduce((s:number, t:any)=> s+(t.progress||0),0) / job.job_tasks.length) : 0;
-        text += `${index + 1}. ${job.title} (${jobProg}%)\n`;
-        const sortedTasks = [...(job.job_tasks || [])].sort((a,b) => (a.task_name || "").localeCompare((b.task_name || ""), 'th', {numeric:true}));
-        sortedTasks.forEach((task: any) => {
-            let icon = '⏳'; if (task.progress === 100) icon = '✅'; else if (task.progress > 0) icon = '🚧';
-            text += `   ${icon} ${task.task_name}: ${task.progress || 0}%\n`;
-        });
-    });
-    text += `\n----------------------------\n🔗 ดูรายละเอียด/รูปภาพ:\nhttps://siriwong.online/manage/project/${projectId}\n\n(สำหรับผู้ที่ยังไม่มี Account)\n👤 User: siriwong\n🔑 Pass: 123456\n=============================`;
-    return text;
-  };
-
-  // ✅ แก้ไข: ใส่ Logic การ Copy ให้ใช้งานได้จริง
-  const handleCopyToClipboard = () => {
-    const text = generateSummaryText();
-    if (!text) return;
-    navigator.clipboard.writeText(text).then(() => {
-        alert("✅ คัดลอกรายงานละเอียดเรียบร้อย! ไปวางใน LINE ได้เลยครับ");
-    }).catch(err => {
-        console.error('Copy failed', err);
-        alert("❌ คัดลอกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
-    });
-  };
-
-  const handleShareToLine = () => {
-    const text = generateSummaryText();
-    window.open(`https://line.me/R/msg/text/?${encodeURIComponent(text)}`, '_blank');
-  };
-
-  // ✅ 3. Infinite Scroll
+  // --- Logic เดิม: Infinite Scroll ---
   const loadLogs = async (page: number, reset: boolean = false) => {
       try {
           setLoadingLogs(true);
@@ -159,46 +120,27 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
     return Object.entries(groups).sort((a, b) => new Date(b[1][0].action_date || b[1][0].createdAt).getTime() - new Date(a[1][0].action_date || a[1][0].createdAt).getTime());
   }, [siteLogs]);
 
+  // --- Handlers ---
   const handleCreateJob = async (e: React.FormEvent) => { e.preventDefault(); try { setSubmitting(true); await createJob(newJobTitle, project.documentId); setNewJobTitle(""); setIsCreateOpen(false); await loadProjectData(); } catch (error) { alert("ล้มเหลว"); } finally { setSubmitting(false); } };
   const handleDeleteJob = async (e: any, id: string, title: string) => { e.stopPropagation(); if (confirm(`ลบ ${title}?`)) { await deleteJob(id); loadProjectData(); } };
   const handleUpdateJob = async (e: React.FormEvent) => { e.preventDefault(); try { await updateJob(editingJob.documentId, { title: editingJob.title }); setIsEditOpen(false); await loadProjectData(); } catch (error) { alert("แก้ไขไม่สำเร็จ"); } };
   const handleSaveMember = async (e: any) => { e.preventDefault(); try { if (editingMember) await updateProjectMember(editingMember.documentId, memberForm); else await addProjectMember({ projectSiteId: projectId, ...memberForm }); setIsMemberModalOpen(false); loadProjectData(); } catch (err) { alert("ล้มเหลว"); } };
   const handleDeleteMember = async (id: string) => { if(confirm("ลบสมาชิก?")) { await deleteProjectMember(id); loadProjectData(); } };
-
+  
   if (loading && !project) return <div className="h-screen flex items-center justify-center text-slate-400 font-bold tracking-widest uppercase text-xs">Loading Siriwong Data...</div>;
 
   return (
     <div className="min-h-screen bg-slate-50 pb-32 font-sans relative">
-      <div className="bg-slate-900 text-white rounded-b-[3rem] p-6 pb-20 shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 rounded-full blur-3xl -mr-20 -mt-20"></div>
-        <div className="relative z-10 max-w-md mx-auto">
-            <div className="flex justify-between items-start mb-6">
-                <Link href="/manage" className="text-white/40 text-xs flex items-center gap-1 bg-white/5 px-3 py-1.5 rounded-full backdrop-blur-md">← กลับ</Link>
-                <div className="flex gap-2">
-                    {/* ✅ ปุ่ม Copy รายงานละเอียดที่แก้ไขแล้ว */}
-                    <button onClick={handleCopyToClipboard} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-full shadow-lg transition-transform active:scale-90" title="คัดลอกรายงานละเอียด">
-                       <Icons.Copy />
-                    </button>
-                    <button onClick={handleShareToLine} className="bg-[#06C755] hover:bg-[#05b54d] text-white px-5 py-2.5 rounded-full text-[10px] font-black shadow-lg transition-transform active:scale-95 uppercase tracking-tighter"><span>LINE</span> แชร์รายงาน</button>
-                </div>
-            </div>
-            <div className="flex items-center gap-2 mb-2"><span className="bg-amber-500 text-black text-[10px] font-black px-2 py-0.5 rounded shadow-sm">On-Going</span><span className="text-[9px] text-white/40 font-bold uppercase tracking-widest">Project #{project?.id}</span></div>
-            <h1 className="text-3xl font-black mb-1 leading-tight">{project?.name}</h1>
-            <p className="text-sm text-slate-400 flex items-center gap-1 mb-8 tracking-tight font-bold">📍 {project?.location}</p>
-            <div className="grid grid-cols-2 gap-4 mb-8">
-                <div className="bg-white/5 backdrop-blur-xl p-5 rounded-[2rem] border border-white/10 shadow-inner">
-                    <div className="flex justify-between items-center mb-1"><span className="text-[10px] font-black text-white/40 uppercase tracking-widest">ระยะทาง</span><Link href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(project?.coordinates || project?.location)}`} target="_blank" className="text-[8px] bg-blue-600 text-white px-2 py-0.5 rounded-full font-bold font-sans">MAP ↗</Link></div>
-                    <p className="text-2xl font-black">{project?.distance_from_branch || "0"} <span className="text-xs text-white/40 font-bold">กม.</span></p>
-                </div>
-                <div className="bg-white/5 backdrop-blur-xl p-5 rounded-[2rem] border border-white/10 shadow-inner"><span className="text-[10px] font-black text-white/40 uppercase tracking-widest block mb-1">แผนงาน</span><p className="text-[11px] font-black leading-tight">{project?.start_date ? new Date(project.start_date).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'}) : "---"} -<br/>{project?.end_date ? new Date(project.end_date).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'}) : "---"}</p></div>
-            </div>
-            <div className="px-1"><span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] block mb-3 font-bold">Project Team Summary</span>
-                <div className="flex -space-x-3">{members.map((m, idx) => { const theme = getUserColor(m.user?.username || ""); return (<div key={`${m.id}-${idx}`} className={`h-10 w-10 rounded-2xl ring-4 ring-slate-900 overflow-hidden ${theme.avatar} shadow-lg transition-transform hover:-translate-y-1`}>{m.user?.avatar?.url ? <img src={m.user.avatar.url.startsWith('http') ? m.user.avatar.url : `${STRAPI_URL}${m.user.avatar.url}`} className="h-full w-full object-cover" /> : <div className="h-full w-full flex items-center justify-center text-xs font-bold text-white uppercase">{m.user?.username?.charAt(0)}</div>}</div>);})}</div>
-            </div>
-        </div>
-      </div>
+      
+      {/* ✅ 1. ใช้ Component Header ใหม่ (สะอาดตา!) */}
+      <ProjectHeader 
+         project={project} 
+         members={members} 
+         onOpenReport={() => setIsReportModalOpen(true)} 
+      />
 
       <main className="max-w-md mx-auto px-4 -mt-8 relative z-20 space-y-6">
+        
         {/* Timeline ทีมงาน */}
         <section className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100">
             <div className="flex justify-between items-center mb-8"><h2 className="font-black text-slate-800 text-base font-sans">👷 Timeline ทีมงาน</h2>{canManage && <button onClick={() => { setEditingMember(null); setMemberForm({ userId: "", role: "", responsibility: "", start_date: "", end_date: "" }); setIsMemberModalOpen(true); }} className="text-[10px] bg-blue-50 text-blue-600 px-4 py-2 rounded-full font-black shadow-sm tracking-tight">+ เพิ่มพนักงาน</button>}</div>
@@ -214,7 +156,7 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
                 return (<div key={job.documentId} className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 relative group transition-all hover:shadow-md"><div className="mb-4 pr-16"><h3 className="font-black text-slate-800 text-lg truncate font-sans">{job.title}</h3><div className="flex items-center gap-3 mt-3"><div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-50"><div className="h-full bg-blue-500 transition-all duration-1000 ease-out" style={{ width: `${avgProg}%` }}></div></div><span className="text-xl font-black text-blue-600 drop-shadow-sm">{avgProg}%</span></div></div>{canManage && <div className="absolute top-6 right-6 flex gap-1 opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => {setEditingJob(job); setIsEditOpen(true);}} className="p-2 text-slate-300 hover:text-blue-600"><Icons.Edit /></button><button onClick={(e) => handleDeleteJob(e, job.documentId, job.title)} className="p-2 text-slate-300 hover:text-red-500"><Icons.Trash /></button></div>}<Link href={`/manage/project/${projectId}/job/${job.documentId}`} className="flex items-center justify-between w-full bg-white border-2 border-red-100 hover:border-red-500 text-red-600 px-6 py-4 rounded-2xl text-sm font-black transition-all shadow-sm active:scale-[0.97] group"><span className="flex items-center gap-2">🔍 ดูรายการย่อย ({job.job_tasks?.length || 0})</span><span className="text-2xl group-hover:translate-x-1 transition-transform">→</span></Link></div>);})}
         </section>
 
-        {/* Site Diary (Infinite Scroll & Duplicate Key Fixed) */}
+        {/* Site Diary */}
         <section className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100 mb-20">
             <h2 className="font-black text-slate-800 mb-8 flex items-center gap-2 text-lg font-sans">📝 Site Diary <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full animate-pulse shadow-md shadow-red-200">Live</span></h2>
             <div className="relative pl-2 space-y-10">
@@ -223,20 +165,53 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
                         <div className="flex items-center gap-2 mb-5"><div className="w-3 h-3 rounded-full bg-blue-500 ring-4 ring-blue-50 shrink-0"></div><span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{dateKey}</span></div>
                         <div className="space-y-4 ml-4">
                             {logs.map((log: any, lIdx) => {
-                                const isDef = log.Log_Type === 'Defect'; const hasMedia = log.Media && log.Media.length > 0;
+                                const isDef = log.Log_Type === 'Defect';
+                                const isInfo = log.Log_Type === 'Info';
+                                const hasMedia = log.Media && log.Media.length > 0;
+                                
+                                let cardStyle = 'bg-white border-slate-100 hover:shadow-xl hover:shadow-slate-200/50';
+                                let textStyle = 'text-slate-800';
+                                let descStyle = 'text-slate-500';
+                                let icon = log.Log_Type === 'Progress' ? "📈" : "📝";
+
+                                if (isDef) {
+                                    cardStyle = 'bg-red-50 border-red-200 shadow-inner';
+                                    textStyle = 'text-red-700';
+                                    descStyle = 'text-red-600';
+                                    icon = "🚨";
+                                } else if (isInfo) {
+                                    cardStyle = 'bg-sky-50 border-sky-200 shadow-inner';
+                                    textStyle = 'text-sky-800';
+                                    descStyle = 'text-sky-600';
+                                    icon = "ℹ️";
+                                }
+
                                 return (
                                     <Link 
                                         key={`${log.documentId}-${gIdx}-${lIdx}`} 
                                         href={`/manage/project/${projectId}/job/${log.jobId}/task/${log.taskId}`}
                                         ref={(gIdx === groupedLogs.length - 1 && lIdx === logs.length - 1) ? lastLogElementRef : null}
-                                        className={`block p-5 rounded-[2rem] border transition-all ${isDef ? 'bg-red-50 border-red-200 shadow-inner' : 'bg-white border-slate-100 hover:shadow-xl hover:shadow-slate-200/50'}`}
+                                        className={`block p-5 rounded-[2rem] border transition-all ${cardStyle}`}
                                     >
                                         <div className="flex gap-4">
                                             {hasMedia ? (<div className="w-16 h-16 rounded-2xl bg-slate-100 shrink-0 overflow-hidden border border-slate-100 shadow-sm"><img src={log.Media[0].url.startsWith('http') ? log.Media[0].url : `${STRAPI_URL}${log.Media[0].url}`} className="w-full h-full object-cover" /></div>) 
-                                            : (<div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 text-2xl ${isDef ? 'bg-red-100 text-red-600' : 'bg-slate-50 text-slate-500 shadow-inner'}`}>{isDef ? "🚨" : (log.Log_Type === 'Progress' ? "📈" : "📝")}</div>)}
+                                            : (<div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 text-2xl ${isDef ? 'bg-red-100 text-red-600' : (isInfo ? 'bg-sky-100 text-sky-600' : 'bg-slate-50 text-slate-500 shadow-inner')}`}>{icon}</div>)}
                                             <div className="flex-1 min-w-0">
-                                                <div className="flex justify-between items-start mb-1.5"><h4 className={`text-sm font-black truncate leading-tight font-sans ${isDef ? 'text-red-700' : 'text-slate-800'}`}>{log.taskName} <span className="text-[10px] text-blue-600 font-black ml-1.5 bg-blue-50 px-1.5 py-0.5 rounded shadow-sm">({log.progress_percentage || 0}%)</span></h4><span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">{new Date(log.action_date || log.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</span></div>
-                                                <p className={`text-[11px] truncate-2-lines leading-relaxed font-bold font-sans ${isDef ? 'text-red-600' : 'text-slate-500'}`}>{log.Description}</p>
+                                                <div className="flex justify-between items-start mb-1.5">
+                                                    <h4 className={`text-sm font-black truncate leading-tight font-sans ${textStyle}`}>
+                                                        {log.taskName} 
+                                                        {/* ✅ ข้อความสถานะที่ปรับแก้แล้ว */}
+                                                        {isDef ? (
+                                                            <span className="text-[10px] text-red-600 font-black ml-1.5 bg-red-100 px-2 py-0.5 rounded-full shadow-sm">(ข้อควรระวัง)</span>
+                                                        ) : isInfo ? (
+                                                            <span className="text-[10px] text-sky-600 font-black ml-1.5 bg-sky-100 px-2 py-0.5 rounded-full shadow-sm">(อัพเดตข้อมูล)</span>
+                                                        ) : (
+                                                            <span className="text-[10px] text-blue-600 font-black ml-1.5 bg-blue-50 px-1.5 py-0.5 rounded shadow-sm">({log.progress_percentage || 0}%)</span>
+                                                        )}
+                                                    </h4>
+                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">{new Date(log.action_date || log.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</span>
+                                                </div>
+                                                <p className={`text-[11px] truncate-2-lines leading-relaxed font-bold font-sans ${descStyle}`}>{log.Description}</p>
                                             </div>
                                         </div>
                                     </Link>
@@ -253,7 +228,16 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
 
       {canManage && <button onClick={() => {setNewJobTitle(""); setIsCreateOpen(true);}} className="fixed bottom-8 right-6 w-16 h-16 bg-slate-900 text-white rounded-full shadow-2xl flex items-center justify-center text-4xl z-[999] active:scale-95 transition-transform font-light shadow-slate-900/40">+</button>}
       
-      {/* Modals [Create/Edit/Member] */}
+      {/* ✅ 2. Report Modal ใหม่ (Logic ย้ายไปอยู่ใน Component แล้ว) */}
+      <ReportModal 
+          isOpen={isReportModalOpen}
+          onClose={() => setIsReportModalOpen(false)}
+          project={project}
+          members={members}
+          siteLogs={siteLogs}
+          projectId={projectId}
+      />
+
       {isCreateOpen && (
         <div className="fixed inset-0 bg-black/60 z-[1000] flex items-end sm:items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in slide-in-from-bottom-10">
