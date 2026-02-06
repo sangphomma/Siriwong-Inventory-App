@@ -18,12 +18,11 @@ import {
   fetchProjectLogs 
 } from "@/services/api"; 
 
-// ✅ Import Components ที่เราเพิ่งสร้าง
+// ✅ Import Components
 import ProjectHeader from "./components/ProjectHeader";
 import ReportModal from "./components/ReportModal";
 
 // --- Helper Functions ---
-// ยังคงไว้สำหรับ Timeline Section ในหน้านี้
 const getUserColor = (name: string) => {
     if (!name) return { bg: "bg-slate-100", text: "text-slate-600", avatar: "bg-slate-500", border: "border-slate-300", glow: "ring-slate-200 shadow-slate-300" };
     const themes = [
@@ -37,7 +36,7 @@ const getUserColor = (name: string) => {
     return themes[sum % themes.length];
 };
 
-// เหลือแค่ Icon ที่จำเป็นสำหรับหน้านี้ (Edit/Trash) ส่วน Report/Map ย้ายไปแล้ว
+// ✅ FIX: Move Icons outside component (Prevent re-creation on render)
 const Icons = {
   Trash: () => (<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg>),
   Edit: () => (<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" /></svg>),
@@ -112,11 +111,14 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
 
   const groupedLogs = useMemo(() => {
     const groups: { [key: string]: any[] } = {};
-    siteLogs.forEach((log) => {
-        const dateKey = new Date(log.action_date || log.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
-        if (!groups[dateKey]) groups[dateKey] = [];
-        groups[dateKey].push(log);
-    });
+    // ✅ FIX: Check Array before forEach
+    if (Array.isArray(siteLogs)) {
+        siteLogs.forEach((log) => {
+            const dateKey = new Date(log.action_date || log.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
+            if (!groups[dateKey]) groups[dateKey] = [];
+            groups[dateKey].push(log);
+        });
+    }
     return Object.entries(groups).sort((a, b) => new Date(b[1][0].action_date || b[1][0].createdAt).getTime() - new Date(a[1][0].action_date || a[1][0].createdAt).getTime());
   }, [siteLogs]);
 
@@ -132,7 +134,6 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
   return (
     <div className="min-h-screen bg-slate-50 pb-32 font-sans relative">
       
-      {/* ✅ 1. ใช้ Component Header ใหม่ (สะอาดตา!) */}
       <ProjectHeader 
          project={project} 
          members={members} 
@@ -145,15 +146,23 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
         <section className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100">
             <div className="flex justify-between items-center mb-8"><h2 className="font-black text-slate-800 text-base font-sans">👷 Timeline ทีมงาน</h2>{canManage && <button onClick={() => { setEditingMember(null); setMemberForm({ userId: "", role: "", responsibility: "", start_date: "", end_date: "" }); setIsMemberModalOpen(true); }} className="text-[10px] bg-blue-50 text-blue-600 px-4 py-2 rounded-full font-black shadow-sm tracking-tight">+ เพิ่มพนักงาน</button>}</div>
             <div className="relative pl-4 border-l-2 border-dashed border-slate-100 space-y-10">
-                {members.map((m: any, idx: number) => { const theme = getUserColor(m.user?.username || ""); const isActive = !m.end_date || new Date(m.end_date) >= new Date();
+                {/* ✅ FIX: Check Array before map */}
+                {Array.isArray(members) && members.map((m: any, idx: number) => { const theme = getUserColor(m.user?.username || ""); const isActive = !m.end_date || new Date(m.end_date) >= new Date();
                     return (<div key={`${m.id}-${idx}`} className="relative pl-10"><div className={`absolute -left-[27px] top-0 w-6 h-6 rounded-full border-4 border-white shadow-md z-10 ${isActive ? 'bg-blue-500' : 'bg-slate-200'}`}></div><div className="flex items-center gap-2 mb-3 -mt-1"><span className="text-[10px] font-black text-blue-600 uppercase tracking-tighter">{new Date(m.start_date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}</span>{isActive && <span className="text-[9px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-black border border-emerald-100 shadow-sm shadow-emerald-50">Active Now</span>}</div><div className={`relative group p-5 rounded-[2rem] border shadow-sm flex items-start gap-4 transition-all hover:shadow-lg ${isActive ? `bg-white ${theme.border}` : 'bg-slate-50 opacity-60'}`}><div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black text-lg shadow-inner shrink-0 overflow-hidden ${theme.avatar} ring-4 ring-offset-2 ${isActive ? theme.glow : ''}`}>{m.user?.avatar?.url ? <img src={m.user.avatar.url.startsWith('http') ? m.user.avatar.url : `${STRAPI_URL}${m.user.avatar.url}`} className="h-full w-full object-cover rounded-2xl" /> : <span>{m.user?.username?.charAt(0).toUpperCase()}</span>}</div><div className="flex-1 min-w-0"><div className="flex justify-between"><div><p className={`font-black text-base ${isActive ? theme.text : 'text-slate-700'}`}>{m.user?.username}</p><p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{m.role_in_project}</p></div>{canManage && (<div className="flex gap-1 opacity-0 group-hover:opacity-100 transition"><button onClick={() => {setEditingMember(m); setMemberForm({userId: m.user.id, role: m.role_in_project, responsibility: m.responsibility, start_date: m.start_date, end_date: m.end_date}); setIsMemberModalOpen(true);}} className="text-slate-300 hover:text-blue-500 p-1"><Icons.Edit /></button><button onClick={() => handleDeleteMember(m.documentId)} className="text-slate-300 hover:text-red-500 p-1"><Icons.Trash /></button></div>)}</div>{m.responsibility && <p className="mt-3 text-[10px] text-slate-600 italic font-bold leading-relaxed border-t border-slate-50 pt-2 font-sans">"{m.responsibility}"</p>}</div></div></div>);})}
             </div>
         </section>
 
         {/* รายการหมวดงาน */}
         <section className="space-y-4"><h2 className="font-black text-slate-800 px-2 text-lg uppercase tracking-wider font-sans">รายการหมวดงาน</h2>
-            {project?.jobs?.map((job: any) => { const avgProg = job.job_tasks && job.job_tasks.length > 0 ? Math.round(job.job_tasks.reduce((s:number, t:any)=> s+(t.progress||0),0) / job.job_tasks.length) : 0;
-                return (<div key={job.documentId} className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 relative group transition-all hover:shadow-md"><div className="mb-4 pr-16"><h3 className="font-black text-slate-800 text-lg truncate font-sans">{job.title}</h3><div className="flex items-center gap-3 mt-3"><div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-50"><div className="h-full bg-blue-500 transition-all duration-1000 ease-out" style={{ width: `${avgProg}%` }}></div></div><span className="text-xl font-black text-blue-600 drop-shadow-sm">{avgProg}%</span></div></div>{canManage && <div className="absolute top-6 right-6 flex gap-1 opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => {setEditingJob(job); setIsEditOpen(true);}} className="p-2 text-slate-300 hover:text-blue-600"><Icons.Edit /></button><button onClick={(e) => handleDeleteJob(e, job.documentId, job.title)} className="p-2 text-slate-300 hover:text-red-500"><Icons.Trash /></button></div>}<Link href={`/manage/project/${projectId}/job/${job.documentId}`} className="flex items-center justify-between w-full bg-white border-2 border-red-100 hover:border-red-500 text-red-600 px-6 py-4 rounded-2xl text-sm font-black transition-all shadow-sm active:scale-[0.97] group"><span className="flex items-center gap-2">🔍 ดูรายการย่อย ({job.job_tasks?.length || 0})</span><span className="text-2xl group-hover:translate-x-1 transition-transform">→</span></Link></div>);})}
+            {/* ✅ FIX: Defensive Code in Map Loop (จุดที่ Error) */}
+            {Array.isArray(project?.jobs) && project.jobs.map((job: any) => { 
+                // เช็คว่า job_tasks เป็น Array จริงไหม ก่อน reduce
+                const tasks = Array.isArray(job.job_tasks) ? job.job_tasks : [];
+                const avgProg = tasks.length > 0 
+                    ? Math.round(tasks.reduce((s:number, t:any)=> s+(t?.progress||0),0) / tasks.length) 
+                    : 0;
+                
+                return (<div key={job.documentId} className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 relative group transition-all hover:shadow-md"><div className="mb-4 pr-16"><h3 className="font-black text-slate-800 text-lg truncate font-sans">{job.title}</h3><div className="flex items-center gap-3 mt-3"><div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-50"><div className="h-full bg-blue-500 transition-all duration-1000 ease-out" style={{ width: `${avgProg}%` }}></div></div><span className="text-xl font-black text-blue-600 drop-shadow-sm">{avgProg}%</span></div></div>{canManage && <div className="absolute top-6 right-6 flex gap-1 opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => {setEditingJob(job); setIsEditOpen(true);}} className="p-2 text-slate-300 hover:text-blue-600"><Icons.Edit /></button><button onClick={(e) => handleDeleteJob(e, job.documentId, job.title)} className="p-2 text-slate-300 hover:text-red-500"><Icons.Trash /></button></div>}<Link href={`/manage/project/${projectId}/job/${job.documentId}`} className="flex items-center justify-between w-full bg-white border-2 border-red-100 hover:border-red-500 text-red-600 px-6 py-4 rounded-2xl text-sm font-black transition-all shadow-sm active:scale-[0.97] group"><span className="flex items-center gap-2">🔍 ดูรายการย่อย ({tasks.length})</span><span className="text-2xl group-hover:translate-x-1 transition-transform">→</span></Link></div>);})}
         </section>
 
         {/* Site Diary */}
@@ -200,14 +209,9 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
                                                 <div className="flex justify-between items-start mb-1.5">
                                                     <h4 className={`text-sm font-black truncate leading-tight font-sans ${textStyle}`}>
                                                         {log.taskName} 
-                                                        {/* ✅ ข้อความสถานะที่ปรับแก้แล้ว */}
-                                                        {isDef ? (
-                                                            <span className="text-[10px] text-red-600 font-black ml-1.5 bg-red-100 px-2 py-0.5 rounded-full shadow-sm">(ข้อควรระวัง)</span>
-                                                        ) : isInfo ? (
-                                                            <span className="text-[10px] text-sky-600 font-black ml-1.5 bg-sky-100 px-2 py-0.5 rounded-full shadow-sm">(อัพเดตข้อมูล)</span>
-                                                        ) : (
-                                                            <span className="text-[10px] text-blue-600 font-black ml-1.5 bg-blue-50 px-1.5 py-0.5 rounded shadow-sm">({log.progress_percentage || 0}%)</span>
-                                                        )}
+                                                        {isDef ? (<span className="text-[10px] text-red-600 font-black ml-1.5 bg-red-100 px-2 py-0.5 rounded-full shadow-sm">(ข้อควรระวัง)</span>) 
+                                                        : isInfo ? (<span className="text-[10px] text-sky-600 font-black ml-1.5 bg-sky-100 px-2 py-0.5 rounded-full shadow-sm">(อัพเดตข้อมูล)</span>) 
+                                                        : (<span className="text-[10px] text-blue-600 font-black ml-1.5 bg-blue-50 px-1.5 py-0.5 rounded shadow-sm">({log.progress_percentage || 0}%)</span>)}
                                                     </h4>
                                                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">{new Date(log.action_date || log.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</span>
                                                 </div>
@@ -228,7 +232,7 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
 
       {canManage && <button onClick={() => {setNewJobTitle(""); setIsCreateOpen(true);}} className="fixed bottom-8 right-6 w-16 h-16 bg-slate-900 text-white rounded-full shadow-2xl flex items-center justify-center text-4xl z-[999] active:scale-95 transition-transform font-light shadow-slate-900/40">+</button>}
       
-      {/* ✅ 2. Report Modal ใหม่ (Logic ย้ายไปอยู่ใน Component แล้ว) */}
+      {/* Report Modal */}
       <ReportModal 
           isOpen={isReportModalOpen}
           onClose={() => setIsReportModalOpen(false)}
