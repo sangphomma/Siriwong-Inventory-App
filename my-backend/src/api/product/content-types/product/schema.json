@@ -60,6 +60,12 @@
     },
     "min_stock": {
       "type": "integer"
+    },
+    "project_material_logs": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::project-material-log.project-material-log",
+      "mappedBy": "product"
     }
   }
 }

@@ -598,3 +598,303 @@ export const fetchProjectLogs = async (projectDocId: string, page: number = 1, p
     return { data: [], meta: null };
   }
 };
+
+// --- 📂 GALLERY SERVICES ---
+
+export const getProjectGalleries = async (projectDocId: string) => {
+  const query = {
+    filters: { project: { documentId: { $eq: projectDocId } } }, // อิงตามชื่อ field 'project' ในรูป 2
+    populate: ['photos'], // ดึงรูปภาพมาด้วย
+    sort: ['createdAt:desc']
+  };
+  const response = await apiClient.get('/project-galleries', {
+    params: query,
+    paramsSerializer: (params) => qs.stringify(params, { encodeValuesOnly: true }),
+  });
+  return response.data.data.map(normalizeStrapiData);
+};
+
+export const createProjectGallery = async (data: any) => {
+    // ต้องห่อด้วย { data: ... } ตามฟอร์ม Strapi
+    return await apiClient.post('/project-galleries', { data });
+};
+
+// --- 📦 MATERIAL & STOCK SERVICES ---
+
+export const getMaterialLogs = async (projectDocId: string) => {
+    const query = {
+      filters: { project_site: { documentId: { $eq: projectDocId } } }, // อิงตามชื่อ field 'project_site' ในรูป 3
+      populate: {
+          product: { populate: ['image'] } // ดึงข้อมูลสินค้าและรูปสินค้า
+      }, 
+      sort: ['log_date:desc']
+    };
+    const response = await apiClient.get('/project-material-logs', {
+      params: query,
+      paramsSerializer: (params) => qs.stringify(params, { encodeValuesOnly: true }),
+    });
+    
+    // Normalize ข้อมูลสินค้าให้ใช้ง่ายๆ
+    const logs = response.data.data.map(normalizeStrapiData);
+    return logs.map((log: any) => {
+        if (log.product?.data) log.product = normalizeStrapiData(log.product.data);
+        return log;
+    });
+};
+
+
+
+// ดึงรายชื่อสินค้าทั้งหมด (เอาไว้ทำ Dropdown ให้เลือกตอนเบิก)
+export const getAllProducts = async () => {
+    const response = await apiClient.get('/products?populate=*');
+    return response.data.data.map(normalizeStrapiData);
+};
+
+// services/api.ts
+
+// ... (ต่อจากโค้ดเดิม)
+
+// 📤 ฟังก์ชันสำหรับอัปโหลดไฟล์ (ใช้ FormData)
+export const uploadFiles = async (refId: string, ref: string, field: string, files: FileList | File[]) => {
+    const formData = new FormData();
+    
+    // ใส่ไฟล์เข้าไปใน FormData
+    Array.from(files).forEach((file) => {
+        formData.append('files', file);
+    });
+
+    // ระบุว่ารูปนี้เป็นของใคร (Ref)
+    formData.append('ref', ref); // ชื่อ Collection (เช่น 'api::project-gallery.project-gallery')
+    formData.append('refId', refId); // ID ของ Entry
+    formData.append('field', field); // ชื่อ Field (เช่น 'photos')
+
+    return await apiClient.post('/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    });
+};
+
+// ✅ สูตรใหม่: อัปโหลดรูปก่อน แล้วส่ง ID กลับไป
+export const uploadFilesOnly = async (files: FileList | File[]) => {
+    const formData = new FormData();
+    
+    Array.from(files).forEach((file) => {
+        formData.append('files', file);
+    });
+
+    // ยิงไปที่ /upload ตรงๆ ไม่ต้องระบุ refId
+    const response = await apiClient.post('/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    
+    return response.data; // จะได้ Array ของไฟล์กลับมา (ในนั้นมี id)
+};
+
+// services/api.ts
+
+// ... (ต่อท้ายไฟล์)
+
+// 🗑️ ลบอัลบั้ม
+export const deleteProjectGallery = async (docId: string) => {
+    return await apiClient.delete(`/project-galleries/${docId}`);
+};
+
+// 🔄 อัปเดตอัลบั้ม (ใช้สำหรับลบรูปบางรูปออกจากอัลบั้ม)
+export const updateProjectGallery = async (docId: string, data: any) => {
+    return await apiClient.put(`/project-galleries/${docId}`, { data });
+};
+
+// services/api.ts
+
+// ...
+
+// 📥 แก้ไขรอบที่ 3: ดึงข้อมูลแบบครอบจักรวาล (populate: '*') และแกะกล่องข้อมูลให้ชัวร์
+// services/api.ts
+
+// ... (Search หา getGalleryPhotos ตัวเก่า ลบออก แล้วแทนด้วยตัวนี้ครับ)
+
+// 📥 ไม้ตาย: ดึงรูปภาพแบบแกะกล่องเอง (Manual Extraction)
+export const getGalleryPhotos = async (galleryId: string) => {
+  try {
+    // 1. ยิง API แบบระบุ populate=* ตรงๆ เพื่อความชัวร์
+    const response = await apiClient.get(`/project-galleries/${galleryId}?populate=*`);
+    
+    // 🔍 Log ดูข้อมูลดิบๆ จาก Strapi (กด F12 ดูใน Console ได้เลย)
+    console.log("🔥 RAW API Response:", response.data);
+
+    // 2. เริ่มแกะข้อมูล (รองรับทั้ง Strapi v4 และ v5)
+    const rootData = response.data.data || response.data; // บางที data อยู่ชั้นนอก บางทีอยู่ชั้นใน
+    const attributes = rootData.attributes || rootData;   // บางที attributes ซ้อนอยู่
+    
+    // 3. หา Array ของรูปภาพ
+    let rawPhotos: any[] = [];
+    
+    if (attributes.photos) {
+        if (Array.isArray(attributes.photos)) {
+             // กรณีเป็น Array เลย (Strapi v5 หรือบาง Setup)
+             rawPhotos = attributes.photos;
+        } else if (attributes.photos.data && Array.isArray(attributes.photos.data)) {
+             // กรณีซ้อนอยู่ใน .data (Strapi v4)
+             rawPhotos = attributes.photos.data;
+        }
+    }
+
+    console.log("📸 Raw Photos Found:", rawPhotos.length);
+
+    // 4. แปลงข้อมูลให้หน้าจอเอาไปใช้ง่ายๆ
+    const cleanPhotos = rawPhotos.map((item: any) => {
+        const attrs = item.attributes || item; // รองรับ v4/v5
+        return {
+            id: item.id,
+            documentId: item.documentId || item.id, // กันเหนียว
+            url: attrs.url,
+            createdAt: attrs.createdAt
+            // ...เพิ่ม field อื่นถ้าต้องการ
+        };
+    });
+
+    return { photos: cleanPhotos }; // ส่งกลับในรูปแบบที่ ProjectGallery.tsx รอรับอยู่
+
+  } catch (error) {
+    console.error("❌ Error in getGalleryPhotos:", error);
+    return { photos: [] }; // ถ้าพัง ให้ส่งอาเรย์ว่างไป หน้าจอจะได้ไม่ขาว
+  }
+};
+
+// ✅ ADD NEW: ฟังก์ชันสำหรับเพิ่มรูปเข้าอัลบั้มเดิม (Connect)
+export const addPhotosToGallery = async (galleryDocId: string, newPhotoIds: string[]) => {
+    return await apiClient.put(`/project-galleries/${galleryDocId}`, {
+        data: {
+            photos: {
+                connect: newPhotoIds // สั่ง Strapi ว่าให้เชื่อมรูปเหล่านี้เพิ่มเข้าไป
+            }
+        }
+    });
+};
+
+// ✂️ ลบรูปออกจากอัลบั้ม (ใช้เทคนิค disconnect)
+export const removePhotoFromGallery = async (galleryId: string, photoId: string) => {
+    return await apiClient.put(`/project-galleries/${galleryId}`, {
+        data: {
+            photos: {
+                disconnect: [photoId] // สั่งตัดความสัมพันธ์เฉพาะรูปนี้
+            }
+        }
+    });
+};
+
+// services/api.ts
+
+// ... (ต่อท้ายไฟล์)
+
+// 📦 MATERIAL: ดึงรายการสินค้าทั้งหมด (สำหรับ Dropdown)
+export const getAllProductsSafe = async () => {
+    try {
+        const response = await apiClient.get('/products?populate=*&sort=name:asc');
+        const rootData = response.data.data || response.data;
+        
+        // แกะกล่องสินค้า
+        let items: any[] = [];
+        if (Array.isArray(rootData)) items = rootData;
+        else if (rootData.data && Array.isArray(rootData.data)) items = rootData.data;
+
+        return items.map((item: any) => {
+            const attrs = item.attributes || item;
+            // แกะรูปภาพสินค้า (ถ้ามี)
+            let imgUrl = null;
+            if (attrs.image) {
+                const imgData = attrs.image.data || attrs.image;
+                if (Array.isArray(imgData) && imgData.length > 0) imgUrl = imgData[0].attributes?.url || imgData[0].url;
+                else if (imgData && !Array.isArray(imgData)) imgUrl = imgData.attributes?.url || imgData.url;
+            }
+
+            return {
+                id: item.id,
+                documentId: item.documentId || item.id,
+                name: attrs.name,
+                unit: attrs.unit || 'ชิ้น',
+                image: imgUrl
+            };
+        });
+    } catch (error) {
+        console.error("Get Products Failed:", error);
+        return [];
+    }
+};
+
+// 📝 MATERIAL: ดึงประวัติการเบิกจ่ายของไซต์นี้ (แก้ไขชื่อ Field)
+export const getMaterialLogsSafe = async (projectDocId: string) => {
+    try {
+        const query = {
+            filters: { project_site: { documentId: { $eq: projectDocId } } }, // ✅ แก้ให้ตรงกับ Strapi
+            populate: {
+                product: { populate: '*' }
+            },
+            sort: ['log_date:desc']
+        };
+        
+        const response = await apiClient.get('/project-material-logs', {
+            params: query,
+            paramsSerializer: (params) => qs.stringify(params, { encodeValuesOnly: true }),
+        });
+
+        const rootData = response.data.data || response.data;
+        let logs: any[] = [];
+        if (Array.isArray(rootData)) logs = rootData;
+        else if (rootData.data && Array.isArray(rootData.data)) logs = rootData.data;
+
+        return logs.map((log: any) => {
+            const attrs = log.attributes || log;
+            
+            let productData = null;
+            if (attrs.product) {
+                const pRaw = attrs.product.data || attrs.product;
+                const pAttrs = pRaw.attributes || pRaw;
+                
+                let pImg = null;
+                if (pAttrs.image) {
+                     const iRaw = pAttrs.image.data || pAttrs.image;
+                     if(Array.isArray(iRaw) && iRaw.length>0) pImg = iRaw[0].attributes?.url || iRaw[0].url;
+                     else if(iRaw && !Array.isArray(iRaw)) pImg = iRaw.attributes?.url || iRaw.url;
+                }
+
+                productData = {
+                    name: pAttrs.name || "สินค้าไม่ระบุชื่อ",
+                    unit: pAttrs.unit || "-",
+                    image: pImg
+                };
+            }
+
+            return {
+                id: log.id,
+                documentId: log.documentId || log.id,
+                quantity: attrs.quantity,
+                requester: attrs.requester_name, 
+                date: attrs.log_date,
+                note: attrs.note,
+                product: productData
+            };
+        });
+
+    } catch (error) {
+        console.error("Get Material Logs Failed:", error);
+        return [];
+    }
+};
+
+// ➕ MATERIAL: สร้างรายการเบิก
+export const createMaterialLog = async (data: any) => {
+    // data ต้องประกอบด้วย: { project: docId, product: docId, quantity: number, requester_name: string, log_date: date, note: string }
+    return await apiClient.post('/project-material-logs', { data });
+};
+
+// ➕ MATERIAL: เพิ่มฟังก์ชันแก้ไขรายการเบิก
+export const updateMaterialLog = async (logId: string, quantity: number) => {
+    return await apiClient.put(`/project-material-logs/${logId}`, {
+        data: { quantity }
+    });
+};
+
+// ➕ MATERIAL: เพิ่มฟังก์ชันลบรายการเบิก
+export const deleteMaterialLog = async (logId: string) => {
+    return await apiClient.delete(`/project-material-logs/${logId}`);
+};

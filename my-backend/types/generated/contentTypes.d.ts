@@ -777,6 +777,10 @@ export interface ApiProductProduct extends Struct.CollectionTypeSchema {
     location: Schema.Attribute.Relation<'manyToOne', 'api::location.location'>;
     min_stock: Schema.Attribute.Integer;
     name: Schema.Attribute.String;
+    project_material_logs: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::project-material-log.project-material-log'
+    >;
     publishedAt: Schema.Attribute.DateTime;
     stock: Schema.Attribute.Integer;
     stock_locations: Schema.Attribute.Relation<
@@ -795,6 +799,83 @@ export interface ApiProductProduct extends Struct.CollectionTypeSchema {
       'oneToMany',
       'api::withdrawal-item.withdrawal-item'
     >;
+  };
+}
+
+export interface ApiProjectGalleryProjectGallery
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'project_galleries';
+  info: {
+    displayName: 'ProjectGallery';
+    pluralName: 'project-galleries';
+    singularName: 'project-gallery';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    category_name: Schema.Attribute.String;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.Text;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::project-gallery.project-gallery'
+    > &
+      Schema.Attribute.Private;
+    photos: Schema.Attribute.Media<
+      'images' | 'files' | 'videos' | 'audios',
+      true
+    >;
+    project: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::project-site.project-site'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiProjectMaterialLogProjectMaterialLog
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'project_material_logs';
+  info: {
+    displayName: 'ProjectMaterialLog';
+    pluralName: 'project-material-logs';
+    singularName: 'project-material-log';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    action_type: Schema.Attribute.Enumeration<['issue', 'return']> &
+      Schema.Attribute.DefaultTo<'issue'>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::project-material-log.project-material-log'
+    > &
+      Schema.Attribute.Private;
+    log_date: Schema.Attribute.DateTime;
+    note: Schema.Attribute.Text;
+    product: Schema.Attribute.Relation<'manyToOne', 'api::product.product'>;
+    project_site: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::project-site.project-site'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    quantity: Schema.Attribute.Decimal;
+    requester_name: Schema.Attribute.String;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
   };
 }
 
@@ -879,6 +960,14 @@ export interface ApiProjectSiteProjectSite extends Struct.CollectionTypeSchema {
     location: Schema.Attribute.Text;
     name: Schema.Attribute.String;
     overall_progress: Schema.Attribute.Integer;
+    project_galleries: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::project-gallery.project-gallery'
+    >;
+    project_material_logs: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::project-material-log.project-material-log'
+    >;
     project_members: Schema.Attribute.Relation<
       'oneToMany',
       'api::project-member.project-member'
@@ -1741,6 +1830,8 @@ declare module '@strapi/strapi' {
       'api::petty-cash.petty-cash': ApiPettyCashPettyCash;
       'api::position.position': ApiPositionPosition;
       'api::product.product': ApiProductProduct;
+      'api::project-gallery.project-gallery': ApiProjectGalleryProjectGallery;
+      'api::project-material-log.project-material-log': ApiProjectMaterialLogProjectMaterialLog;
       'api::project-member.project-member': ApiProjectMemberProjectMember;
       'api::project-site.project-site': ApiProjectSiteProjectSite;
       'api::return-request.return-request': ApiReturnRequestReturnRequest;
