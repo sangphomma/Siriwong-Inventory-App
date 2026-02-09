@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-// ✅ 1. เพิ่ม createPortal เพื่อแก้ปัญหาเมนูบัง
 import { createPortal } from "react-dom";
 import { STRAPI_URL } from "@/services/config";
 import { 
@@ -9,58 +8,28 @@ import {
     getMaterialLogsSafe, 
     createMaterialLog,
     updateMaterialLog,
-    deleteMaterialLog
+    deleteMaterialLog,
+    getAllUsers,
+    getMaterialPresets // ✅ เพิ่ม import ตัวนี้
 } from "@/services/api";
 
 interface ProjectMaterialProps {
     projectId: string;
-    // ไม่จำเป็นต้องใช้ onModalStateChange แล้ว เพราะ Portal จะทับเมนูเอง
     onModalStateChange?: (isOpen: boolean) => void; 
 }
 
-// --- 🛠️ PRESET CONFIGURATION ---
-// 💡 เช็คชื่อสินค้าใน Database ให้เป๊ะทุกตัวอักษร (รวมเว้นวรรค)
-const MATERIAL_PRESETS = [
-    {
-        name: "🏠 งานโครงหลังคา",
-        icon: "🏠",
-        items: [
-            { exactName: "เหล็กกล่อง 4x2", defaultQty: 10 }, 
-            { exactName: "เหล็กกล่อง 4x4", defaultQty: 4 },
-            { exactName: "ลวดเชื่อม 2.6", defaultQty: 2 }, 
-            { keyword: "สีกันสนิม", defaultQty: 1 } 
-        ]
-    },
-    {
-        name: "🧱 งานก่ออิฐ/ฉาบ",
-        icon: "🧱",
-        items: [
-            { exactName: "ปูนเสือ (ก่อ/ฉาบ)", defaultQty: 20 },
-            { exactName: "ทรายหยาบ", defaultQty: 1 },
-            { exactName: "อิฐมวลเบา 7.5", defaultQty: 200 }
-        ]
-    },
-    {
-        name: "⚡ งานไฟฟ้า",
-        icon: "⚡",
-        items: [
-            { keyword: "สายไฟ", defaultQty: 2 },
-            { keyword: "ท่อ PVC", defaultQty: 10 },
-            { keyword: "เทปพันสายไฟ", defaultQty: 2 }
-        ]
-    }
-];
+// ❌ ลบ const MATERIAL_PRESETS ของเดิมออกได้เลยครับ เราไม่ใช้แล้ว
 
 export default function ProjectMaterial({ projectId }: ProjectMaterialProps) {
     const [logs, setLogs] = useState<any[]>([]);
     const [products, setProducts] = useState<any[]>([]);
+    const [presets, setPresets] = useState<any[]>([]); // ✅ เพิ่ม State สำหรับเก็บ Presets
     const [loading, setLoading] = useState(true);
-    
+    const [users, setUsers] = useState<any[]>([]);
     // UI States
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     
-    // ✅ State สำหรับ Portal (กัน Error document is not defined ตอน Server render)
     const [mounted, setMounted] = useState(false);
     useEffect(() => setMounted(true), []);
 
@@ -73,12 +42,22 @@ export default function ProjectMaterial({ projectId }: ProjectMaterialProps) {
     const initData = async () => {
         setLoading(true);
         try {
-            const [logsData, productsData] = await Promise.all([
+            // ✅ เพิ่มการโหลด getMaterialPresets()
+            const [logsData, productsData,usersData, presetsData] = await Promise.all([
                 getMaterialLogsSafe(projectId),
-                getAllProductsSafe()
+                getAllProductsSafe(),
+                getAllUsers(),
+                getMaterialPresets()
             ]);
+
+            console.log("🔥 LOGS:", logsData);
+            console.log("🔥 USERS:", usersData);
+            console.log("🔥 PRESETS:", presetsData);
+
             setLogs(logsData);
             setProducts(productsData);
+            setUsers(usersData);
+            setPresets(presetsData); // ✅ เซ็ตค่า Presets
         } catch (error) {
             console.error(error);
         } finally {
@@ -126,48 +105,40 @@ export default function ProjectMaterial({ projectId }: ProjectMaterialProps) {
         }
     };
 
-    // --- 🛒 PRESET LOGIC ---
+    // --- 🛒 PRESET LOGIC (แบบใหม่ ใช้ Dynamic Data) ---
     const loadPreset = (presetIndex: number) => {
-        const preset = MATERIAL_PRESETS[presetIndex];
+        const preset = presets[presetIndex]; // ✅ ดึงจาก State
+        if (!preset || !preset.items) return;
+
         const newBatch: any[] = [];
-        let matchCount = 0;
-
-        preset.items.forEach(item => {
-            let foundProduct = null;
-            // 1. หาจากชื่อเป๊ะ
-            if ((item as any).exactName) {
-                foundProduct = products.find(p => p.name.trim() === (item as any).exactName.trim());
-            }
-            // 2. ถ้าไม่เจอ หาจาก Keyword
-            if (!foundProduct && item.keyword) {
-                foundProduct = products.find(p => p.name.includes(item.keyword));
-            }
-
-            if (foundProduct) {
-                matchCount++;
-                const exists = batchItems.find(b => b.productId === foundProduct.documentId);
+        
+        // Loop สินค้าใน Preset
+        preset.items.forEach((item: any) => {
+            const product = item.product;
+            if (product) {
+                // เช็คว่ามีในรายการเบิกอยู่แล้วไหม
+                const exists = batchItems.find(b => b.productId === product.documentId);
+                
                 if (!exists) {
                     newBatch.push({
-                        productId: foundProduct.documentId,
-                        name: foundProduct.name,
-                        unit: foundProduct.unit,
-                        quantity: item.defaultQty,
+                        productId: product.documentId,
+                        name: product.name,
+                        unit: product.unit || "หน่วย",
+                        quantity: item.quantity || 1, // ใช้จำนวนที่ตั้งไว้ใน Strapi
                         note: ""
                     });
                 }
-            } else {
-                 console.warn(`❌ Preset หาไม่เจอ: ${(item as any).exactName || item.keyword}`);
             }
         });
 
-        if (matchCount === 0) {
-            alert(`⚠️ ไม่พบสินค้าในชุด "${preset.name}" เลย\nกรุณาเช็คชื่อสินค้าในโค้ด (MATERIAL_PRESETS) ให้ตรงกับใน Database`);
+        if (newBatch.length === 0) {
+            alert("สินค้าในชุดนี้ถูกเพิ่มไปหมดแล้ว หรือไม่มีสินค้าในระบบ");
         } else {
             setBatchItems(prev => [...prev, ...newBatch]);
         }
     };
 
-    // ... (Manual Add & Submit) ...
+    // ... (ส่วนที่เหลือเหมือนเดิมจนถึง render) ...
     const handleManualAddItem = (productId: string) => {
         if (!productId) return;
         const foundProduct = products.find(p => p.documentId === productId);
@@ -219,7 +190,7 @@ export default function ProjectMaterial({ projectId }: ProjectMaterialProps) {
                 <button onClick={() => setIsCreateOpen(true)} className="bg-amber-50 text-amber-600 px-4 py-2 rounded-full font-black text-xs shadow-sm border border-amber-100 active:scale-95 transition-transform flex items-center gap-1">+ เบิกของ</button>
             </div>
 
-            {/* TIMELINE */}
+            {/* TIMELINE (เหมือนเดิม) */}
             <div className="space-y-8">
                 {Object.entries(groupedLogs).map(([date, items]: [string, any[]]) => (
                     <div key={date} className="relative pl-4 border-l-2 border-slate-100">
@@ -270,22 +241,27 @@ export default function ProjectMaterial({ projectId }: ProjectMaterialProps) {
                     <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-6 shadow-2xl animate-in slide-in-from-bottom-10 h-[85vh] flex flex-col relative">
                         <h3 className="font-black text-xl mb-4 text-slate-800 text-center shrink-0">🛒 เบิกวัสดุ (Batch)</h3>
                         
+                        {/* ✅ Loop Render Presets จาก API */}
                         <div className="mb-4 overflow-x-auto pb-2 shrink-0">
                             <div className="flex gap-2">
-                                {MATERIAL_PRESETS.map((preset, idx) => (
-                                    <button 
-                                        key={idx}
-                                        onClick={() => loadPreset(idx)}
-                                        className="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-600 text-xs whitespace-nowrap hover:bg-amber-50 hover:border-amber-200 hover:text-amber-700 active:scale-95 transition-all"
-                                    >
-                                        <span>{preset.icon}</span>
-                                        <span>{preset.name}</span>
-                                    </button>
-                                ))}
+                                {presets.length > 0 ? (
+                                    presets.map((preset, idx) => (
+                                        <button 
+                                            key={preset.id || idx}
+                                            onClick={() => loadPreset(idx)}
+                                            className="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-600 text-xs whitespace-nowrap hover:bg-amber-50 hover:border-amber-200 hover:text-amber-700 active:scale-95 transition-all"
+                                        >
+                                            <span>{preset.icon || '📦'}</span>
+                                            <span>{preset.title}</span>
+                                        </button>
+                                    ))
+                                ) : (
+                                    <span className="text-xs text-slate-400 px-2 py-2">-- ไม่พบ Preset --</span>
+                                )}
                             </div>
                         </div>
 
-                        {/* ... (เนื้อหา Modal ส่วนที่เหลือเหมือนเดิม) ... */}
+                        {/* ... (ส่วน Dropdown และ List รายการ เหมือนเดิม) ... */}
                         <div className="mb-4 shrink-0 relative">
                             <select 
                                 className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 font-bold text-slate-700 text-sm outline-none appearance-none"
@@ -330,14 +306,32 @@ export default function ProjectMaterial({ projectId }: ProjectMaterialProps) {
                                 </div>
                                 <div className="flex-1">
                                     <label className="text-[10px] font-black text-slate-400 ml-1 mb-1 block uppercase">ผู้เบิก</label>
-                                    <input type="text" placeholder="ชื่อเล่น" className="w-full p-3 bg-white rounded-xl border border-slate-200 font-bold text-sm outline-none" value={requester} onChange={e => setRequester(e.target.value)} />
+                                    
+{/* ✅ เปลี่ยนเป็น Dropdown */}
+                                    <div className="relative">
+                                        <select 
+                                            className="w-full p-3 bg-white rounded-xl border border-slate-200 font-bold text-sm outline-none appearance-none" 
+                                            value={requester} 
+                                            onChange={e => setRequester(e.target.value)}
+                                        >
+                                            <option value="" disabled>-- เลือกชื่อ --</option>
+                                            {users.map((u) => (
+                                                <option key={u.id} value={u.username}>
+                                                    {u.username} {u.position ? `(${u.position})` : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <div className="absolute right-3 top-3.5 text-slate-400 pointer-events-none text-[10px]">▼</div>
+                                    </div>
+
+
                                 </div>
                             </div>
                             <button onClick={handleBatchSubmit} disabled={submitting || batchItems.length === 0} className="w-full py-4 bg-amber-500 text-white rounded-xl font-black text-sm uppercase shadow-xl shadow-amber-200 active:scale-95 transition-transform disabled:opacity-50 disabled:scale-100">{submitting ? 'กำลังบันทึก...' : `ยืนยันการเบิก (${batchItems.filter(i => i.quantity > 0).length} รายการ)`}</button>
                         </div>
                     </div>
                 </div>,
-                document.body // 👈 วาร์ปไปที่ body
+                document.body 
             )}
         </div>
     );

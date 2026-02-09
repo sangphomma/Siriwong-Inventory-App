@@ -1,0 +1,19 @@
+{
+  "collectionName": "components_inventory_preset_items",
+  "info": {
+    "displayName": "PresetItem",
+    "icon": "dashboard"
+  },
+  "options": {},
+  "attributes": {
+    "product": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::product.product"
+    },
+    "quantity": {
+      "type": "integer"
+    }
+  },
+  "config": {}
+}

@@ -683,6 +683,37 @@ export interface ApiLocationLocation extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiMaterialPresetMaterialPreset
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'material_presets';
+  info: {
+    displayName: 'MaterialPreset';
+    pluralName: 'material-presets';
+    singularName: 'material-preset';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    icon: Schema.Attribute.String;
+    items: Schema.Attribute.Component<'inventory.preset-item', true>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::material-preset.material-preset'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    title: Schema.Attribute.String;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiPettyCashPettyCash extends Struct.CollectionTypeSchema {
   collectionName: 'petty_cashes';
   info: {
@@ -1827,6 +1858,7 @@ declare module '@strapi/strapi' {
       'api::job-task.job-task': ApiJobTaskJobTask;
       'api::job.job': ApiJobJob;
       'api::location.location': ApiLocationLocation;
+      'api::material-preset.material-preset': ApiMaterialPresetMaterialPreset;
       'api::petty-cash.petty-cash': ApiPettyCashPettyCash;
       'api::position.position': ApiPositionPosition;
       'api::product.product': ApiProductProduct;

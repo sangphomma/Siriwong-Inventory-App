@@ -1,0 +1,26 @@
+{
+  "kind": "collectionType",
+  "collectionName": "material_presets",
+  "info": {
+    "singularName": "material-preset",
+    "pluralName": "material-presets",
+    "displayName": "MaterialPreset"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "items": {
+      "type": "component",
+      "component": "inventory.preset-item",
+      "repeatable": true
+    },
+    "title": {
+      "type": "string"
+    },
+    "icon": {
+      "type": "string"
+    }
+  }
+}

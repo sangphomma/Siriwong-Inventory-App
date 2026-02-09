@@ -67,14 +67,31 @@ const normalizeStrapiData = (data: any): any => {
   return normalized;
 };
 
-// ... (ส่วนอื่นเหมือนเดิม)
-
-// ✅ เพิ่มฟังก์ชันดึงรายชื่อ User ทั้งหมด
+// ✅ Safe Version: ดึง User แบบไม่พังแน่นอน
 export const getAllUsers = async () => {
-  const response = await apiClient.get('/users');
-  return response.data;
-};
+  try {
+    const response = await apiClient.get('/users');
+    
+    // 🔍 Log ดูว่าได้อะไรกลับมา (กด F12 ดู console)
+    console.log("🔥 Raw Users API:", response.data);
 
+    // กรณีปกติ Strapi จะส่งมาเป็น Array เลย [ {id:1...}, {id:2...} ]
+    if (Array.isArray(response.data)) {
+        return response.data;
+    }
+    
+    // กรณี Strapi บางเวอร์ชันส่งมาเป็น Object { data: [...] }
+    if (response.data && Array.isArray(response.data.data)) {
+        return response.data.data; // แกะออกมา
+    }
+
+    return []; // ถ้าไม่ใช่ทั้งคู่ ให้ส่ง array ว่างไปก่อน (กันแอปพัง)
+
+  } catch (error) {
+    console.error("❌ Get Users Failed:", error);
+    return []; // ส่ง array ว่างเมื่อ error
+  }
+};
 
 // ==========================================
 // 🏗️ PROJECT SITES (Level 0)
@@ -897,4 +914,73 @@ export const updateMaterialLog = async (logId: string, quantity: number) => {
 // ➕ MATERIAL: เพิ่มฟังก์ชันลบรายการเบิก
 export const deleteMaterialLog = async (logId: string) => {
     return await apiClient.delete(`/project-material-logs/${logId}`);
+};
+
+
+// services/api.ts
+
+// 🎁 MATERIAL: ดึงข้อมูล Presets (แบบแกะกล่องชัวร์ 100%)
+export const getMaterialPresets = async () => {
+  try {
+    const query = {
+      populate: {
+        items: {
+          populate: {
+             product: { populate: '*' } // ดึง Product และรูปภาพ
+          }
+        }
+      },
+      sort: ['createdAt:asc']
+    };
+
+    const response = await apiClient.get('/material-presets', {
+      params: query,
+      paramsSerializer: (params) => qs.stringify(params, { encodeValuesOnly: true }),
+    });
+
+    // ✅ MANUAL UNWRAP: แกะข้อมูลเองทีละชั้น รองรับทั้ง Strapi v4 และ v5
+    const rawData = response.data.data || [];
+    
+    return rawData.map((item: any) => {
+        const attrs = item.attributes || item; // ถ้ามี attributes ก็ใช้ ถ้าไม่มีก็ใช้ตัวมันเอง
+        
+        // แกะ Items (สินค้าข้างใน)
+        let cleanItems: any[] = [];
+        if (attrs.items) {
+            cleanItems = attrs.items.map((subItem: any) => {
+                const subAttrs = subItem; 
+                
+                // แกะ Product (ที่ซ้อนอยู่ใน Relation)
+                let prod = subAttrs.product;
+                if (prod && prod.data) {
+                    const prodAttrs = prod.data.attributes || prod.data;
+                    prod = { 
+                        id: prod.data.id, 
+                        documentId: prod.data.documentId,
+                        name: prodAttrs.name,
+                        unit: prodAttrs.unit,
+                        // ...ค่าอื่นๆ
+                    };
+                }
+                
+                return {
+                    quantity: subAttrs.quantity,
+                    product: prod
+                };
+            });
+        }
+
+        return {
+            id: item.id,
+            documentId: item.documentId,
+            title: attrs.title || "No Title", // ถ้าไม่มีชื่อ ให้ขึ้น No Title
+            icon: attrs.icon || "📦",         // ถ้าไม่มีไอคอน ให้ขึ้นกล่อง
+            items: cleanItems
+        };
+    });
+
+  } catch (error) {
+    console.error("Get Presets Failed:", error);
+    return [];
+  }
 };
