@@ -1241,6 +1241,7 @@ export interface ApiUserActivityUserActivity
       'images' | 'files' | 'videos' | 'audios',
       true
     >;
+    position: Schema.Attribute.String;
     project_site: Schema.Attribute.Relation<
       'oneToOne',
       'api::project-site.project-site'

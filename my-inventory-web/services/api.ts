@@ -830,7 +830,6 @@ export const deleteMaterialPreset = async (presetId: string) => {
 // ==========================================
 // 📅 USER ACTIVITIES & SCHEDULE (New) ✅
 // ==========================================
-
 export const getUserActivities = async (userId: string | number, dateString: string) => {
   try {
     const query = {
@@ -853,12 +852,28 @@ export const getUserActivities = async (userId: string | number, dateString: str
       const projectData = act.project_site || act.project_sites; 
       const realProject = Array.isArray(projectData) ? projectData[0] : projectData;
 
+      // แก้ URL รูปภาพ
       const fixedPhotos = (act.photos || []).map((photo: any) => {
          if (photo.url && photo.url.startsWith('/')) {
             return { ...photo, url: `${STRAPI_URL}${photo.url}` };
          }
          return photo;
       });
+
+      // 🔥 LOGIC ใหม่: รวมร่าง "ชื่อโปรเจกต์" + "(ชื่อเขต)"
+      let displayLocation = "ไม่ระบุสถานที่";
+      
+      if (realProject) {
+          // ถ้าเป็นโปรเจกต์ และมีข้อมูลเขต (locationText) ให้เอามาวงเล็บต่อท้าย
+          if (act.location_text) {
+              displayLocation = `${realProject.name} (${act.location_text})`;
+          } else {
+              displayLocation = realProject.name;
+          }
+      } else {
+          // ถ้าไม่ใช่โปรเจกต์ ก็ใช้ชื่อสถานที่ปกติ
+          displayLocation = act.location_text || "ไม่ระบุสถานที่";
+      }
 
       return {
         id: act.id,
@@ -868,20 +883,24 @@ export const getUserActivities = async (userId: string | number, dateString: str
         type: act.activity_type,
         startTime: act.start_time?.substring(0, 5), 
         endTime: act.end_time?.substring(0, 5) || null,
-        location: realProject?.name || act.location_text || "ไม่ระบุสถานที่",
+        
+        // ✅ ใช้ค่าที่เราคำนวณใหม่ตรงนี้
+        location: displayLocation,
+        
         projectId: realProject?.documentId || realProject?.id || "",
-        locationText: act.location_text || "",
+        locationText: act.location_text || "", 
         coordinates: act.coordinates || null, 
         isProject: !!realProject,
         photos: fixedPhotos 
       };
     });
 
-  } catch (error: any) {
-    console.error("❌ Get User Activities Failed:", error);
+  } catch (error) {
+    console.error("Get User Activities Failed:", error);
     return [];
   }
 };
+
 
 export const createUserActivity = async (data: any) => {
   try {
@@ -956,22 +975,63 @@ export const deleteUserActivity = async (docId: string) => {
   return await apiClient.delete(`/user-activities/${docId}`);
 };
 
+// services/api.ts
+
 export const generateLineReport = async (userId: string | number, dateString: string) => {
-  const activities = await getUserActivities(userId, dateString);
-  if (!activities || activities.length === 0) return "วันนี้ยังไม่มีบันทึกกิจกรรมครับ";
-
-  let report = `📅 *รายงานประจำวัน (${dateString})*\n--------------------------------\n`;
-
-  activities.forEach((act: any) => {
-    const icon = act.type === 'Travel' ? '🚗' : (act.type === 'Meeting' ? '👥' : '✅');
-    const time = act.endTime ? `${act.startTime}-${act.endTime}` : `${act.startTime}`;
+  try {
+    // 1. ดึงข้อมูล User มาก่อน (เพื่อเอาชื่อและตำแหน่ง)
+    const userRes = await apiClient.get(`/users/${userId}?populate=role`);
+    const userData = userRes.data;
     
-    report += `${icon} *${time}* : ${act.title}\n`;
-    if(act.location && act.location !== "ไม่ระบุสถานที่") report += `   📍 ${act.location}\n`;
-    if(act.details) report += `   📝 ${act.details}\n`;
-    report += `\n`;
-  });
+    // ตั้งค่า Default ถ้าไม่มีข้อมูล
+    const userName = userData.username || "พนักงาน";
+    const userPos = userData.position || "Staff"; // ⚠️ ต้องไปเพิ่ม field 'position' ใน Strapi User ด้วยนะครับ
 
-  report += `--------------------------------\n#SiriwongInventory`;
-  return report;
+    // 2. ดึงกิจกรรม
+    const activities = await getUserActivities(userId, dateString);
+    if (!activities || activities.length === 0) return "วันนี้ยังไม่มีบันทึกกิจกรรมครับ";
+
+    // 3. เริ่มสร้างรายงานตามฟอร์แมตที่ต้องการ
+    let report = `📅 *แผนการทำงานประจำวัน (${dateString})*\n`;
+    report += `ชื่อ ${userName}\n`;
+    //report += `ตำแหน่ง ${userPos}\n`;
+    report += `--------------------------------\n`;
+
+    activities.forEach((act: any) => {
+      // เลือกไอคอนตามประเภทงาน
+      let icon = '✅';
+      if (act.type === 'Travel') icon = '🚗';
+      if (act.type === 'Meeting') icon = '👥';
+      if (act.type === 'Site inspection') icon = '👷';
+      if (act.type === 'Programming') icon = '💻';
+
+      const time = act.endTime ? `${act.startTime}-${act.endTime}` : `${act.startTime}`;
+      
+      report += `${icon} *${time}* : ${act.title}\n`;
+      
+      // แสดงสถานที่
+      if (act.location && act.location !== "ไม่ระบุสถานที่") {
+         report += `   📍 ${act.location}\n`;
+      }
+      
+      // แสดงรายละเอียด (ซึ่งตอนนี้จะมีชื่อเขตจาก GPS ต่อท้ายมาด้วย ถ้ามี)
+      if (act.details) {
+         report += `   📝 ${act.details}\n`;
+      }
+      
+      report += `\n`;
+    });
+
+    report += `-----------------------------\n`;
+    report += `ดูรายละเอียดอัพเดตงานได้ที่\n`;
+    report += `https://siriwong.online/manage/schedule\n`; // ✅ เปลี่ยนเป็น URL จริงให้แล้ว
+    report += `--------------------------------\n`;
+    report += `#SiriwongInventory`;
+    
+    return report;
+
+  } catch (error) {
+    console.error("Generate Report Failed:", error);
+    return "เกิดข้อผิดพลาดในการสร้างรายงาน";
+  }
 };
