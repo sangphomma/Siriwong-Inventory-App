@@ -112,6 +112,12 @@
       "relation": "oneToMany",
       "target": "api::project-member.project-member",
       "mappedBy": "user"
+    },
+    "user_activities": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::user-activity.user-activity",
+      "mappedBy": "users_permissions_user"
     }
   }
 }

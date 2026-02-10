@@ -1207,6 +1207,57 @@ export interface ApiTransactionTransaction extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiUserActivityUserActivity
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'user_activities';
+  info: {
+    displayName: 'UserActivity';
+    pluralName: 'user-activities';
+    singularName: 'user-activity';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    action_date: Schema.Attribute.Date;
+    activity_type: Schema.Attribute.Enumeration<
+      ['Survey', 'Design', 'Programming', 'Site inspection', 'General']
+    >;
+    coordinates: Schema.Attribute.String;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    details: Schema.Attribute.Text;
+    end_time: Schema.Attribute.Time;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::user-activity.user-activity'
+    > &
+      Schema.Attribute.Private;
+    location_text: Schema.Attribute.String;
+    location_type: Schema.Attribute.Enumeration<['Project', 'Office', 'Other']>;
+    photos: Schema.Attribute.Media<
+      'images' | 'files' | 'videos' | 'audios',
+      true
+    >;
+    project_site: Schema.Attribute.Relation<
+      'oneToOne',
+      'api::project-site.project-site'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    start_time: Schema.Attribute.Time;
+    title: Schema.Attribute.String;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    users_permissions_user: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+  };
+}
+
 export interface ApiWithdrawalItemWithdrawalItem
   extends Struct.CollectionTypeSchema {
   collectionName: 'withdrawal_items';
@@ -1827,6 +1878,10 @@ export interface PluginUsersPermissionsUser
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    user_activities: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::user-activity.user-activity'
+    >;
     username: Schema.Attribute.String &
       Schema.Attribute.Required &
       Schema.Attribute.Unique &
@@ -1871,6 +1926,7 @@ declare module '@strapi/strapi' {
       'api::tag.tag': ApiTagTag;
       'api::task-log.task-log': ApiTaskLogTaskLog;
       'api::transaction.transaction': ApiTransactionTransaction;
+      'api::user-activity.user-activity': ApiUserActivityUserActivity;
       'api::withdrawal-item.withdrawal-item': ApiWithdrawalItemWithdrawalItem;
       'api::withdrawal-order.withdrawal-order': ApiWithdrawalOrderWithdrawalOrder;
       'api::withdrawal-request.withdrawal-request': ApiWithdrawalRequestWithdrawalRequest;

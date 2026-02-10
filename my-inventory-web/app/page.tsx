@@ -13,7 +13,7 @@ export default function HomeHub() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-md">
         
-        {/* Project System */}
+        {/* 1. Project System */}
         <Link 
             href="/manage"
             className="group bg-white/10 p-6 rounded-3xl border border-white/5 hover:bg-blue-600 hover:border-blue-500 transition-all active:scale-95 flex flex-col items-center gap-3"
@@ -23,9 +23,19 @@ export default function HomeHub() {
             <span className="text-xs text-slate-400 group-hover:text-blue-200">Projects & Progress</span>
         </Link>
 
-        {/* Inventory (Placeholder) */}
+        {/* 2. Daily Schedule (NEW ✨) */}
         <Link 
-            href="/inventory" // แก้ Link ตามจริงถ้ามี
+            href="/manage/schedule"
+            className="group bg-white/10 p-6 rounded-3xl border border-white/5 hover:bg-violet-600 hover:border-violet-500 transition-all active:scale-95 flex flex-col items-center gap-3"
+        >
+            <span className="text-4xl group-hover:scale-110 transition-transform">📅</span>
+            <span className="font-bold text-lg">ตารางงานของฉัน</span>
+            <span className="text-xs text-slate-400 group-hover:text-violet-200">Daily Activity Log</span>
+        </Link>
+
+        {/* 3. Inventory */}
+        <Link 
+            href="/inventory" 
             className="group bg-white/10 p-6 rounded-3xl border border-white/5 hover:bg-emerald-600 hover:border-emerald-500 transition-all active:scale-95 flex flex-col items-center gap-3"
         >
             <span className="text-4xl group-hover:scale-110 transition-transform">📦</span>
@@ -33,9 +43,9 @@ export default function HomeHub() {
             <span className="text-xs text-slate-400 group-hover:text-emerald-200">Stock & Materials</span>
         </Link>
 
-        {/* Surveyor (Placeholder) */}
+        {/* 4. Surveyor */}
         <Link 
-            href="/surveyor" // แก้ Link ตามจริงถ้ามี
+            href="/surveyor" 
             className="group bg-white/10 p-6 rounded-3xl border border-white/5 hover:bg-amber-600 hover:border-amber-500 transition-all active:scale-95 flex flex-col items-center gap-3"
         >
             <span className="text-4xl group-hover:scale-110 transition-transform">📐</span>

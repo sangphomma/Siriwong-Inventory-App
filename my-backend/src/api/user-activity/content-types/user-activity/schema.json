@@ -1,0 +1,75 @@
+{
+  "kind": "collectionType",
+  "collectionName": "user_activities",
+  "info": {
+    "singularName": "user-activity",
+    "pluralName": "user-activities",
+    "displayName": "UserActivity"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "title": {
+      "type": "string"
+    },
+    "details": {
+      "type": "text"
+    },
+    "action_date": {
+      "type": "date"
+    },
+    "start_time": {
+      "type": "time"
+    },
+    "end_time": {
+      "type": "time"
+    },
+    "activity_type": {
+      "type": "enumeration",
+      "enum": [
+        "Survey",
+        "Design",
+        "Programming",
+        "Site inspection",
+        "General"
+      ]
+    },
+    "location_type": {
+      "type": "enumeration",
+      "enum": [
+        "Project",
+        "Office",
+        "Other"
+      ]
+    },
+    "location_text": {
+      "type": "string"
+    },
+    "users_permissions_user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "inversedBy": "user_activities"
+    },
+    "project_site": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::project-site.project-site"
+    },
+    "photos": {
+      "type": "media",
+      "multiple": true,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    },
+    "coordinates": {
+      "type": "string"
+    }
+  }
+}
