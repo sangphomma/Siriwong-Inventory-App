@@ -799,24 +799,25 @@ export const removePhotoFromGallery = async (galleryId: string, photoId: string)
     });
 };
 
-// services/api.ts
 
-// ... (ต่อท้ายไฟล์)
 
-// 📦 MATERIAL: ดึงรายการสินค้าทั้งหมด (สำหรับ Dropdown)
+// ... (ส่วนอื่นๆ เหมือนเดิม)
+
+// 📦 MATERIAL: ดึงรายการสินค้าทั้งหมด (ปรับปรุงให้ดึง Category)
 export const getAllProductsSafe = async () => {
     try {
+        // ✅ เพิ่ม &sort=category.name:asc เพื่อให้เรียงตามหมวดหมู่ก่อน
         const response = await apiClient.get('/products?populate=*&sort=name:asc');
         const rootData = response.data.data || response.data;
         
-        // แกะกล่องสินค้า
         let items: any[] = [];
         if (Array.isArray(rootData)) items = rootData;
         else if (rootData.data && Array.isArray(rootData.data)) items = rootData.data;
 
         return items.map((item: any) => {
             const attrs = item.attributes || item;
-            // แกะรูปภาพสินค้า (ถ้ามี)
+            
+            // 1. แกะรูปภาพ (เหมือนเดิม)
             let imgUrl = null;
             if (attrs.image) {
                 const imgData = attrs.image.data || attrs.image;
@@ -824,12 +825,28 @@ export const getAllProductsSafe = async () => {
                 else if (imgData && !Array.isArray(imgData)) imgUrl = imgData.attributes?.url || imgData.url;
             }
 
+            // 2. ✅ แกะ Category (New!)
+            // เช็คหลายชั้นหน่อย กันเหนียวทั้ง v4 และ v5
+            let catName = "ทั่วไป"; // Default
+            if (attrs.category) {
+                const catData = attrs.category.data || attrs.category;
+                if (catData) {
+                    // ถ้าเป็น Array (กรณี Many-to-Many) เอาตัวแรก, ถ้าเป็น Object (One-to-Many) เอาเลย
+                    const catObj = Array.isArray(catData) ? catData[0] : catData;
+                    const catAttrs = catObj.attributes || catObj;
+                    if (catAttrs?.name) {
+                        catName = catAttrs.name;
+                    }
+                }
+            }
+
             return {
                 id: item.id,
                 documentId: item.documentId || item.id,
                 name: attrs.name,
                 unit: attrs.unit || 'ชิ้น',
-                image: imgUrl
+                image: imgUrl,
+                category: catName // ✅ ส่งออกไปเป็น String ธรรมดาเลย ใช้ง่าย
             };
         });
     } catch (error) {
@@ -917,7 +934,6 @@ export const deleteMaterialLog = async (logId: string) => {
 };
 
 
-// services/api.ts
 
 // 🎁 MATERIAL: ดึงข้อมูล Presets (แบบแกะกล่องชัวร์ 100%)
 export const getMaterialPresets = async () => {
@@ -983,4 +999,36 @@ export const getMaterialPresets = async () => {
     console.error("Get Presets Failed:", error);
     return [];
   }
+};
+
+// ==========================================
+// 📦 PRESET MANAGEMENT (Admin Frontend)
+// ==========================================
+
+// สร้าง Preset ใหม่
+export const createMaterialPreset = async (data: { title: string, icon: string, items: any[] }) => {
+    // data.items ต้องเป็น array ของ { product: productId, quantity: number }
+    return await apiClient.post('/material-presets', {
+        data: {
+            title: data.title,
+            icon: data.icon || '📦',
+            items: data.items // Strapi จะ map เข้า Component ให้เองถ้า structure ตรง
+        }
+    });
+};
+
+// แก้ไข Preset
+export const updateMaterialPreset = async (presetId: string, data: { title: string, icon: string, items: any[] }) => {
+    return await apiClient.put(`/material-presets/${presetId}`, {
+        data: {
+            title: data.title,
+            icon: data.icon,
+            items: data.items
+        }
+    });
+};
+
+// ลบ Preset
+export const deleteMaterialPreset = async (presetId: string) => {
+    return await apiClient.delete(`/material-presets/${presetId}`);
 };
