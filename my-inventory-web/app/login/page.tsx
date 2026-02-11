@@ -37,7 +37,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md p-8 bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 shadow-2xl relative z-10">
         
         {/* Logo & Title */}
-        <div className="text-center mb-10">
+        <div className="text-center mb-8">
             <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-emerald-400 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-blue-500/30 mb-4">
                 <span className="text-3xl">👷</span>
             </div>
@@ -119,8 +119,23 @@ export default function LoginPage() {
             {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
           </button>
         </form>
+
+        {/* ✅ ส่วนสำหรับแจ้ง User ทดสอบระบบ (ลบออกได้เมื่อจบ Phase Test) */}
+        <div className="mt-6 p-4 bg-white/5 border border-dashed border-slate-600 rounded-xl text-center">
+            <p className="text-xs text-slate-400 mb-2 font-bold uppercase tracking-wider">🧪 สำหรับทดสอบระบบ</p>
+            <div className="flex justify-center gap-4 text-sm font-mono text-slate-300">
+                <div className="flex flex-col">
+                    <span className="text-[10px] text-slate-500">Username</span>
+                    <span className="text-blue-400 font-bold bg-blue-900/20 px-2 rounded">siriwong</span>
+                </div>
+                <div className="flex flex-col">
+                    <span className="text-[10px] text-slate-500">Password</span>
+                    <span className="text-emerald-400 font-bold bg-emerald-900/20 px-2 rounded">123456</span>
+                </div>
+            </div>
+        </div>
         
-        <div className="mt-8 text-center">
+        <div className="mt-6 text-center">
             <p className="text-[10px] text-slate-600">© 2026 Siriwong Karnchang. All rights reserved.</p>
         </div>
       </div>

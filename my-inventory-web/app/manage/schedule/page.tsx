@@ -75,8 +75,30 @@ export default function SchedulePage() {
     coordinates: '', photos: [] as File[]
   });
 
+  // ✅ 0. เพิ่ม: ดักจับถ้าไม่มี User ให้เด้งไป Login (แก้ปัญหาเปิดใน LINE แล้วค้าง)
+  useEffect(() => {
+    // หน่วงเวลา 1.5 วิ เพื่อให้แน่ใจว่าไม่ได้แค่โหลดช้า
+    const timer = setTimeout(() => {
+      if (!user) {
+        // ถ้ายังไม่มี User อีก ให้หยุดโหลดแล้วดีดไปหน้า Login
+        setLoading(false);
+        router.push('/login');
+      }
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [user, router]);
+
   useEffect(() => { fetchProjects(); }, []);
-  useEffect(() => { if (user) fetchActivities(); }, [date, user]);
+  
+  // ✅ แก้ไข: เพิ่มเงื่อนไข else เพื่อหยุด loading กรณีไม่มี user
+  useEffect(() => { 
+    if (user) {
+        fetchActivities(); 
+    } else {
+        // ถ้าไม่มี user ไม่ต้อง fetch แต่ให้หยุดหมุน (รอ redirect จาก useEffect ข้างบนทำงาน)
+        // setLoading(false); // เอาออก เพราะเดี๋ยว useEffect ข้างบนจัดการให้
+    }
+  }, [date, user]);
 
   // ✅ 1. ดักจับเมื่อเลือกโปรเจกต์ -> ดึงพิกัด -> แล้วค้นหาชื่อเขตทันที!
   useEffect(() => {
@@ -96,7 +118,19 @@ export default function SchedulePage() {
   }, [formData.projectId, formData.type, projects]); // ทำงานเมื่อเปลี่ยนโปรเจกต์
 
   const fetchProjects = async () => { try { const res = await getAllProjects(); setProjects(res || []); } catch (err) { console.error(err); } };
-  const fetchActivities = async () => { if (!user) return; setLoading(true); try { const res = await getUserActivities(user.id, date); setActivities(res); } catch (error) { console.error(error); } finally { setLoading(false); } };
+  
+  const fetchActivities = async () => { 
+      if (!user) return; 
+      setLoading(true); 
+      try { 
+          const res = await getUserActivities(user.id, date); 
+          setActivities(res); 
+      } catch (error) { 
+          console.error(error); 
+      } finally { 
+          setLoading(false); 
+      } 
+  };
 
   // ✅ 2. ฟังก์ชันค้นหาที่อยู่ (ปรับปรุงใหม่ รองรับโหมด Auto)
   const lookupAddress = async (lat: number, lon: number, isAutoMode = false) => {

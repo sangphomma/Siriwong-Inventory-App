@@ -1024,7 +1024,8 @@ export const generateLineReport = async (userId: string | number, dateString: st
 
     report += `-----------------------------\n`;
     report += `ดูรายละเอียดอัพเดตงานได้ที่\n`;
-    report += `https://siriwong.online/manage/schedule\n`; // ✅ เปลี่ยนเป็น URL จริงให้แล้ว
+    report += `https://siriwong.online/manage/schedule\n`; 
+    report += `(หากเปิดไม่ได้ ให้กดจุด 3 จุดมุมขวาบน เลือก 'Open in external browser')\n`; // เพิ่มบรรทัดนี้
     report += `--------------------------------\n`;
     report += `#SiriwongInventory`;
     
