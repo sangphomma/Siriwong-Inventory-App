@@ -976,6 +976,7 @@ export const deleteUserActivity = async (docId: string) => {
 };
 
 // services/api.ts
+// services/api.ts
 
 export const generateLineReport = async (userId: string | number, dateString: string) => {
   try {
@@ -985,7 +986,7 @@ export const generateLineReport = async (userId: string | number, dateString: st
     
     // ตั้งค่า Default ถ้าไม่มีข้อมูล
     const userName = userData.username || "พนักงาน";
-    const userPos = userData.position || "Staff"; // ⚠️ ต้องไปเพิ่ม field 'position' ใน Strapi User ด้วยนะครับ
+    // const userPos = userData.position || "Staff"; 
 
     // 2. ดึงกิจกรรม
     const activities = await getUserActivities(userId, dateString);
@@ -994,7 +995,6 @@ export const generateLineReport = async (userId: string | number, dateString: st
     // 3. เริ่มสร้างรายงานตามฟอร์แมตที่ต้องการ
     let report = `📅 *แผนการทำงานประจำวัน (${dateString})*\n`;
     report += `ชื่อ ${userName}\n`;
-    //report += `ตำแหน่ง ${userPos}\n`;
     report += `--------------------------------\n`;
 
     activities.forEach((act: any) => {
@@ -1014,7 +1014,7 @@ export const generateLineReport = async (userId: string | number, dateString: st
          report += `   📍 ${act.location}\n`;
       }
       
-      // แสดงรายละเอียด (ซึ่งตอนนี้จะมีชื่อเขตจาก GPS ต่อท้ายมาด้วย ถ้ามี)
+      // แสดงรายละเอียด
       if (act.details) {
          report += `   📝 ${act.details}\n`;
       }
@@ -1024,8 +1024,12 @@ export const generateLineReport = async (userId: string | number, dateString: st
 
     report += `-----------------------------\n`;
     report += `ดูรายละเอียดอัพเดตงานได้ที่\n`;
-    report += `https://siriwong.online/manage/schedule\n`; 
-    report += `(หากเปิดไม่ได้ ให้กดจุด 3 จุดมุมขวาบน เลือก 'Open in external browser')\n`; // เพิ่มบรรทัดนี้
+    
+    // ✅ แก้ไขตรงนี้: เปลี่ยนลิงก์ไปหน้า View พร้อมแนบ uid และ name
+    // ใช้ encodeURIComponent เพื่อรองรับชื่อภาษาไทยใน URL
+    report += `https://siriwong.online/manage/schedule/view?uid=${userId}&name=${encodeURIComponent(userName)}\n`; 
+    
+    report += `(หากเปิดไม่ได้ ให้กดจุด 3 จุดมุมขวาบน เลือก 'Open in external browser')\n`;
     report += `--------------------------------\n`;
     report += `#SiriwongInventory`;
     
