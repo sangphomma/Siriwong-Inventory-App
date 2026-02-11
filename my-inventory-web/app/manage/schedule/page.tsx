@@ -7,7 +7,8 @@ import {
   ArrowLeft, Calendar, Plus, MapPin, 
   Trash2, Share, Copy, X, Loader2,
   Pencil, Image as ImageIcon,
-  LocateFixed, ExternalLink, Search 
+  LocateFixed, ExternalLink, Search,
+  Home // ✅ 1. เพิ่มไอคอน Home
 } from 'lucide-react';
 
 // Context & Services
@@ -75,14 +76,13 @@ export default function SchedulePage() {
     coordinates: '', photos: [] as File[]
   });
 
-  // ✅ 0. เพิ่ม: ดักจับถ้าไม่มี User ให้เด้งไป Login (แก้ปัญหาเปิดใน LINE แล้วค้าง)
+  // ✅ Logic: ดักจับถ้าไม่มี User ให้เด้งไป Login (พร้อมแนบ returnUrl)
   useEffect(() => {
-    // หน่วงเวลา 1.5 วิ เพื่อให้แน่ใจว่าไม่ได้แค่โหลดช้า
     const timer = setTimeout(() => {
       if (!user) {
-        // ถ้ายังไม่มี User อีก ให้หยุดโหลดแล้วดีดไปหน้า Login
         setLoading(false);
-        router.push('/login');
+        const currentPath = window.location.pathname; 
+        router.push(`/login?returnUrl=${encodeURIComponent(currentPath)}`);
       }
     }, 1500);
     return () => clearTimeout(timer);
@@ -90,32 +90,25 @@ export default function SchedulePage() {
 
   useEffect(() => { fetchProjects(); }, []);
   
-  // ✅ แก้ไข: เพิ่มเงื่อนไข else เพื่อหยุด loading กรณีไม่มี user
+  // Logic: ถ้าไม่มี user ให้รอ redirect (ไม่โหลดข้อมูล)
   useEffect(() => { 
     if (user) {
         fetchActivities(); 
-    } else {
-        // ถ้าไม่มี user ไม่ต้อง fetch แต่ให้หยุดหมุน (รอ redirect จาก useEffect ข้างบนทำงาน)
-        // setLoading(false); // เอาออก เพราะเดี๋ยว useEffect ข้างบนจัดการให้
-    }
+    } 
   }, [date, user]);
 
-  // ✅ 1. ดักจับเมื่อเลือกโปรเจกต์ -> ดึงพิกัด -> แล้วค้นหาชื่อเขตทันที!
   useEffect(() => {
     if (formData.projectId && formData.type === 'Site inspection') {
       const selectedProject = projects.find(p => (p.documentId === formData.projectId) || (p.id == formData.projectId));
       if (selectedProject?.coordinates) {
-        // อัปเดตพิกัดลงฟอร์ม
         setFormData(prev => ({ ...prev, coordinates: selectedProject.coordinates }));
-        
-        // แยก Lat/Long แล้วสั่งค้นหาชื่อเขต (โหมดเงียบ: true)
         const parts = selectedProject.coordinates.split(',').map((s: string) => s.trim());
         if (parts.length === 2) {
            lookupAddress(parseFloat(parts[0]), parseFloat(parts[1]), true); 
         }
       }
     }
-  }, [formData.projectId, formData.type, projects]); // ทำงานเมื่อเปลี่ยนโปรเจกต์
+  }, [formData.projectId, formData.type, projects]); 
 
   const fetchProjects = async () => { try { const res = await getAllProjects(); setProjects(res || []); } catch (err) { console.error(err); } };
   
@@ -132,7 +125,6 @@ export default function SchedulePage() {
       } 
   };
 
-  // ✅ 2. ฟังก์ชันค้นหาที่อยู่ (ปรับปรุงใหม่ รองรับโหมด Auto)
   const lookupAddress = async (lat: number, lon: number, isAutoMode = false) => {
       setLookingUp(true);
       try {
@@ -143,17 +135,13 @@ export default function SchedulePage() {
             const district = data.address.city_district || data.address.district || data.address.county || "";
             const province = data.address.city || data.address.state || "";
             
-            // สร้างชื่อสั้นๆ สำหรับต่อท้ายชื่อโปรเจกต์ เช่น "บางเขน กรุงเทพมหานคร"
             const shortLocationName = `${subDistrict} ${district}`.trim(); 
-            // สร้างชื่อเต็ม
             const fullLocationName = `${shortLocationName} ${province}`.trim();
 
             setFormData(prev => {
               if (prev.projectId) {
-                // 🎯 กรณีเลือกโปรเจกต์: เอาชื่อเขตไปใส่ใน locationText (เพื่อเอาไปรวมร่างใน API)
                 return { ...prev, locationText: shortLocationName };
               } else {
-                // กรณีงานทั่วไป: ใส่ชื่อเต็มในช่องสถานที่เลย
                 return { ...prev, locationText: fullLocationName };
               }
             });
@@ -221,11 +209,28 @@ export default function SchedulePage() {
   return (
     <div className="min-h-screen bg-slate-50 pb-20">
       <div className="bg-white px-4 pt-4 pb-2 sticky top-0 z-10 shadow-sm border-b border-slate-200">
+        
+        {/* ✅ 2. ส่วน Header ปรับปรุงใหม่ มีปุ่ม Home */}
         <div className="flex items-center justify-between mb-4">
-          <Link href="/manage" className="p-2 -ml-2 text-slate-500"><ArrowLeft size={24} /></Link>
+          <div className="flex items-center gap-2">
+            {/* ปุ่มย้อนกลับ */}
+            <Link href="/manage" className="p-2 -ml-2 text-slate-500 hover:text-blue-600 transition-colors">
+               <ArrowLeft size={24} />
+            </Link>
+            
+            {/* ปุ่ม Home กลับหน้าหลัก */}
+            <Link href="/" className="p-2 text-slate-500 bg-slate-100 rounded-full hover:bg-blue-50 hover:text-blue-600 transition-all" title="กลับหน้าหลัก">
+               <Home size={20} />
+            </Link>
+          </div>
+
           <h1 className="text-lg font-bold text-slate-800">ตารางงานของฉัน</h1>
-          <button onClick={handleOpenReport} className="text-blue-600 font-medium text-sm flex items-center gap-1 bg-blue-50 px-3 py-1 rounded-full"><Share size={16} /> สรุป</button>
+          
+          <button onClick={handleOpenReport} className="text-blue-600 font-medium text-sm flex items-center gap-1 bg-blue-50 px-3 py-1 rounded-full border border-blue-100 shadow-sm hover:shadow-md transition-all">
+            <Share size={16} /> สรุป
+          </button>
         </div>
+
         <div className="flex items-center gap-3 bg-slate-100 p-2 rounded-lg"><Calendar className="text-slate-500" size={20} /><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="bg-transparent w-full text-slate-800 font-medium outline-none" /></div>
       </div>
 

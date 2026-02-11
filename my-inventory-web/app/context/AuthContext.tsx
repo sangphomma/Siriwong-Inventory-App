@@ -21,8 +21,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    const storedUser = getUser();
-    const token = getToken();
+    const storedUser = getUser(); // ดึง User จาก Cookie
+    const token = getToken(); // ดึง Token จาก Cookie
     if (storedUser && token) {
       setUser(storedUser);
     }
@@ -30,14 +30,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async (identifier: string, pass: string) => {
-    const { user: userData } = await authLogin(identifier, pass);
+    // เรียกใช้ service เพื่อ login
+    const { user: userData } = await authLogin(identifier, pass); //
+    
+    // อัปเดต state user
     setUser(userData);
-    router.push('/manage'); 
+    
+    // ❌ ลบบรรทัด router.push('/manage') ออกไปแล้ว
+    // เพื่อให้ LoginPage เป็นคนตัดสินใจ redirect เอง (เผื่อกรณีมี returnUrl)
   };
 
   const logout = () => {
     authLogout();
     setUser(null);
+    router.push('/login'); // logout ยังคง redirect ไป login ได้เหมือนเดิม
   };
 
   return (
