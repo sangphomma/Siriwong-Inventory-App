@@ -14,22 +14,31 @@ import {
 import { STRAPI_URL } from "@/services/config";
 import { resizeImage } from "@/utils/imageResizer"; 
 
-// ✅ 1. เพิ่ม action_date ใน Interface
+// ✅ 1. ปรับ Interface ให้รองรับ Type ใหม่
 interface LogFormData {
   id?: string;
   description: string;
   problems: string;
   progress: number;
-  logType: 'Progress' | 'Info' | 'Defect';
+  logType: 'Progress' | 'Info' | 'Defect' | 'Requirement' | 'Observation'; // 👈 เพิ่มตรงนี้
   newPhotos: File[];
   existingImages: any[];
-  action_date: string; // 👈 เพิ่มตรงนี้
+  action_date: string;
 }
 
+// ✅ 2. เพิ่มสีและไอคอนสำหรับ Type ใหม่
 const getTypeStyles = (type: string) => {
     switch (type) {
         case 'Progress': return { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', icon: '📈', badge: 'bg-blue-100 text-blue-700' };
         case 'Defect': return { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', icon: '⚠️', badge: 'bg-red-100 text-red-700' };
+        
+        // 👇 สีม่วง: สำหรับสเปค/ความต้องการ (Requirement)
+        case 'Requirement': return { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700', icon: '💎', badge: 'bg-purple-100 text-purple-700' };
+        
+        // 👇 สีส้ม: สำหรับข้อสังเกตหน้างาน (Observation)
+        case 'Observation': return { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-800', icon: '👀', badge: 'bg-orange-100 text-orange-800' };
+
+        // Default: Info
         case 'Info': default: return { bg: 'bg-cyan-50', border: 'border-cyan-200', text: 'text-cyan-700', icon: 'ℹ️', badge: 'bg-cyan-100 text-cyan-700' };
     }
 };
@@ -46,7 +55,6 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
   
-  // ✅ 2. เพิ่ม default value ให้ action_date (Now)
   const [formData, setFormData] = useState<LogFormData>({
     description: "",
     problems: "",
@@ -54,7 +62,7 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
     logType: 'Info', 
     newPhotos: [],
     existingImages: [],
-    action_date: new Date().toISOString().slice(0, 16) // Format: YYYY-MM-DDTHH:mm
+    action_date: new Date().toISOString().slice(0, 16)
   });
 
   const isAdmin = user?.role?.name === 'Admin' || user?.role?.type === 'admin';
@@ -103,7 +111,6 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
       logType: log.Log_Type || 'Info',
       newPhotos: [],
       existingImages: log.Media || [],
-      // ✅ 3. ดึงวันที่เดิมมาใส่ใน Input (ถ้าไม่มีใช้ createdAt)
       action_date: log.action_date 
         ? new Date(log.action_date).toISOString().slice(0, 16) 
         : new Date(log.createdAt).toISOString().slice(0, 16)
@@ -133,7 +140,7 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
           progress: formData.progress,
           logType: formData.logType, 
           photos: formData.newPhotos,
-          action_date: formData.action_date // ✅ ส่งวันที่ที่เลือกไปด้วย
+          action_date: formData.action_date
       };
 
       if (formMode === 'create') {
@@ -144,7 +151,6 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
       }
       setIsFormOpen(false);
       setFormMode('create');
-      // Reset Form
       setFormData(prev => ({ 
           ...prev, 
           description: "", problems: "", logType: 'Info', newPhotos: [], existingImages: [], 
@@ -166,6 +172,7 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
           <span>{icon}</span> {label}
       </button>
   );
+
   const removeNewPhoto = (index: number) => {
     const updated = [...formData.newPhotos];
     updated.splice(index, 1);
@@ -197,7 +204,6 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
         ) : (
           task.task_logs.map((log: any) => {
               const style = getTypeStyles(log.Log_Type || 'Info');
-              // ✅ 4. แสดงผลวันที่จาก action_date ถ้ามี
               const logDate = log.action_date ? new Date(log.action_date) : new Date(log.createdAt);
               
               return (
@@ -241,7 +247,7 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
                    <button onClick={() => setIsFormOpen(false)} className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
                  </div>
                  <form onSubmit={handleSubmit} className="space-y-5">
-                    {/* ✅ 5. ช่องเลือกวันที่และเวลา */}
+                    
                     <div>
                         <label className="text-xs font-bold text-slate-500 ml-1 block mb-1">📅 วันที่/เวลาที่บันทึก</label>
                         <input 
@@ -252,16 +258,37 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
                         />
                     </div>
 
-                    <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl">
-                        <TypeButton type="Progress" label="คืบหน้า" icon="📈" activeColor="bg-blue-600 text-white" />
-                        <TypeButton type="Info" label="ข้อมูล" icon="ℹ️" activeColor="bg-cyan-500 text-white" />
-                        <TypeButton type="Defect" label="แจ้งปัญหา" icon="⚠️" activeColor="bg-red-500 text-white" />
+                    {/* ✅ 3. ปรับปุ่มเลือก Type ให้ครบ 5 แบบ แบ่ง 2 แถว */}
+                    <div className="space-y-2">
+                        <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl">
+                            <TypeButton type="Progress" label="คืบหน้า" icon="📈" activeColor="bg-blue-600 text-white" />
+                            <TypeButton type="Defect" label="ปัญหา" icon="⚠️" activeColor="bg-red-500 text-white" />
+                            <TypeButton type="Info" label="ทั่วไป" icon="ℹ️" activeColor="bg-cyan-500 text-white" />
+                        </div>
+                        <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl">
+                             <TypeButton type="Requirement" label="สเปค/บรีฟลูกค้า" icon="💎" activeColor="bg-purple-600 text-white" />
+                             <TypeButton type="Observation" label="ข้อสังเกตหน้างาน" icon="👀" activeColor="bg-orange-500 text-white" />
+                        </div>
                     </div>
+
+                    {/* Progress Bar (แสดงเฉพาะเมื่อเลือก Progress) */}
                     {formData.logType === 'Progress' && (<div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 animate-in fade-in slide-in-from-top-2"><div className="flex justify-between text-xs text-blue-600 mb-2"><label className="font-bold">อัปเดตความคืบหน้า (%)</label><span className="font-bold text-2xl">{formData.progress}%</span></div><input type="range" min="0" max="100" step="5" value={formData.progress} onChange={e => setFormData({...formData, progress: Number(e.target.value)})} className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer accent-blue-600" /><p className="text-[10px] text-blue-400 mt-2 text-center">*ค่านี้จะถูกนำไปคำนวณ Progress รวมของงาน</p></div>)}
-                    <textarea placeholder={formData.logType === 'Defect' ? "รายละเอียดปัญหา..." : "รายละเอียดการทำงาน..."} className="w-full p-4 font-medium text-slate-700 bg-white border border-slate-200 rounded-2xl text-sm h-32 focus:ring-2 focus:ring-slate-400 outline-none resize-none shadow-sm" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+                    
+                    {/* ✅ 4. Placeholder ปรับตาม Type */}
+                    <textarea 
+                        placeholder={
+                            formData.logType === 'Defect' ? "รายละเอียดปัญหา..." : 
+                            formData.logType === 'Requirement' ? "ระบุสเปควัสดุ หรือบรีฟจากลูกค้า (เช่น ปูน 240ksc)..." :
+                            formData.logType === 'Observation' ? "สภาพหน้างานที่พบ (เช่น ดินทรุด, ทางแคบ)..." :
+                            "รายละเอียดการทำงาน..."
+                        } 
+                        className="w-full p-4 font-medium text-slate-700 bg-white border border-slate-200 rounded-2xl text-sm h-32 focus:ring-2 focus:ring-slate-400 outline-none resize-none shadow-sm" 
+                        value={formData.description} 
+                        onChange={e => setFormData({...formData, description: e.target.value})} 
+                    />
+
                     <div className={`transition-all ${formData.logType === 'Defect' ? 'block' : 'opacity-100'}`}><input type="text" placeholder={formData.logType === 'Defect' ? "⚠️ ระบุหัวข้อปัญหา (จำเป็น)*" : "⚠️ ปัญหาที่พบ (ถ้ามี)"} className={`w-full p-4 rounded-2xl text-sm outline-none transition-colors ${formData.logType === 'Defect' ? 'bg-red-50 border border-red-300 text-red-700 placeholder:text-red-400 focus:ring-2 focus:ring-red-200' : 'bg-slate-50 border border-slate-200 text-slate-600 focus:ring-2 focus:ring-slate-200'}`} value={formData.problems} onChange={e => setFormData({...formData, problems: e.target.value})} /></div>
                     
-                    {/* ✅ แก้ไข: ลบ backslash ใน accept และ className */}
                     <div className="space-y-2 pt-2"><label className="text-xs font-bold text-slate-500 ml-1">รูปภาพแนบ</label><div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">{formData.existingImages.map((img) => (<div key={img.id} className="relative flex-shrink-0 w-20 h-20 group"><img src={img.url.startsWith('http') ? img.url : `${STRAPI_URL}${img.url}`} className="w-full h-full object-cover rounded-xl border shadow-sm" /><button type="button" onClick={() => removeExistingImage(img.id)} className="absolute -top-2 -right-2 w-6 h-6 bg-white text-red-500 rounded-full text-xs shadow-md border border-slate-100 flex items-center justify-center">✕</button></div>))}{formData.newPhotos.map((file, idx) => (<div key={idx} className="relative flex-shrink-0 w-20 h-20 group"><img src={URL.createObjectURL(file)} className="w-full h-full object-cover rounded-xl border shadow-sm opacity-90" /><button type="button" onClick={() => removeNewPhoto(idx)} className="absolute -top-2 -right-2 w-6 h-6 bg-slate-700 text-white rounded-full text-xs shadow-md flex items-center justify-center">✕</button></div>))}
                     <label className="flex-shrink-0 w-20 h-20 bg-slate-50 hover:bg-slate-100 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center cursor-pointer text-slate-400 transition-colors">
                         <span className="text-xl">📷</span>
@@ -270,7 +297,7 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
                     </label>
                     </div></div>
 
-                    <button type="submit" disabled={submitting} className={`w-full text-white font-bold py-4 rounded-2xl shadow-lg shadow-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98] ${formData.logType === 'Progress' ? 'bg-blue-600 hover:bg-blue-700' : formData.logType === 'Defect' ? 'bg-red-500 hover:bg-red-600' : 'bg-cyan-500 hover:bg-cyan-600'}`}>{submitting ? "กำลังบันทึก..." : (formMode === 'create' ? "บันทึกข้อมูล" : "อัปเดตการแก้ไข")}</button>
+                    <button type="submit" disabled={submitting} className={`w-full text-white font-bold py-4 rounded-2xl shadow-lg shadow-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98] ${formData.logType === 'Progress' ? 'bg-blue-600 hover:bg-blue-700' : formData.logType === 'Defect' ? 'bg-red-500 hover:bg-red-600' : formData.logType === 'Requirement' ? 'bg-purple-600 hover:bg-purple-700' : formData.logType === 'Observation' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-cyan-500 hover:bg-cyan-600'}`}>{submitting ? "กำลังบันทึก..." : (formMode === 'create' ? "บันทึกข้อมูล" : "อัปเดตการแก้ไข")}</button>
                  </form>
                </div>
              )}

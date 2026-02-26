@@ -29,7 +29,8 @@
       "enum": [
         "active",
         "closed",
-        "pending"
+        "pending",
+        "survey"
       ]
     },
     "return_requests": {
@@ -108,6 +109,12 @@
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::project-material-log.project-material-log",
+      "mappedBy": "project_site"
+    },
+    "survey_logs": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::survey-log.survey-log",
       "mappedBy": "project_site"
     }
   }

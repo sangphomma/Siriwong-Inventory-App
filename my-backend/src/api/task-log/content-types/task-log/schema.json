@@ -23,7 +23,9 @@
         "Progress",
         "Defect",
         "Photo",
-        "Info"
+        "Info",
+        "Requirement",
+        "Observation"
       ]
     },
     "Media": {

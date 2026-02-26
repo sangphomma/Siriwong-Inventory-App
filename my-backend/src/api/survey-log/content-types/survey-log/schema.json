@@ -1,0 +1,45 @@
+{
+  "kind": "collectionType",
+  "collectionName": "survey_logs",
+  "info": {
+    "singularName": "survey-log",
+    "pluralName": "survey-logs",
+    "displayName": "SurveyLog"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "topic": {
+      "type": "string"
+    },
+    "description": {
+      "type": "text"
+    },
+    "photos": {
+      "type": "media",
+      "multiple": true,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    },
+    "severity": {
+      "type": "enumeration",
+      "enum": [
+        "Normal",
+        "Critical",
+        "Info"
+      ]
+    },
+    "project_site": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project-site.project-site",
+      "inversedBy": "survey_logs"
+    }
+  }
+}

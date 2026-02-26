@@ -1,3 +1,4 @@
+// app/page.tsx
 import Link from "next/link";
 
 export default function HomeHub() {
@@ -13,9 +14,9 @@ export default function HomeHub() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-md">
         
-        {/* 1. Project System */}
+        {/* 1. Project System (งานก่อสร้าง -> Active) */}
         <Link 
-            href="/manage"
+            href="/manage?status=active"
             className="group bg-white/10 p-6 rounded-3xl border border-white/5 hover:bg-blue-600 hover:border-blue-500 transition-all active:scale-95 flex flex-col items-center gap-3"
         >
             <span className="text-4xl group-hover:scale-110 transition-transform">🏗️</span>
@@ -23,7 +24,7 @@ export default function HomeHub() {
             <span className="text-xs text-slate-400 group-hover:text-blue-200">Projects & Progress</span>
         </Link>
 
-        {/* 2. Daily Schedule (NEW ✨) */}
+        {/* 2. Daily Schedule */}
         <Link 
             href="/manage/schedule"
             className="group bg-white/10 p-6 rounded-3xl border border-white/5 hover:bg-violet-600 hover:border-violet-500 transition-all active:scale-95 flex flex-col items-center gap-3"
@@ -43,14 +44,14 @@ export default function HomeHub() {
             <span className="text-xs text-slate-400 group-hover:text-emerald-200">Stock & Materials</span>
         </Link>
 
-        {/* 4. Surveyor */}
+        {/* 4. Surveyor (แก้ไขแล้ว: ชี้ไปที่ manage พร้อมตัวกรอง survey) */}
         <Link 
-            href="/surveyor" 
-            className="group bg-white/10 p-6 rounded-3xl border border-white/5 hover:bg-amber-600 hover:border-amber-500 transition-all active:scale-95 flex flex-col items-center gap-3"
+            href="/manage?status=survey" 
+            className="group bg-white/10 p-6 rounded-3xl border border-white/5 hover:bg-purple-600 hover:border-purple-500 transition-all active:scale-95 flex flex-col items-center gap-3"
         >
             <span className="text-4xl group-hover:scale-110 transition-transform">📐</span>
             <span className="font-bold text-lg">สำรวจหน้างาน</span>
-            <span className="text-xs text-slate-400 group-hover:text-amber-200">Survey Tools</span>
+            <span className="text-xs text-slate-400 group-hover:text-purple-200">Survey Tools</span>
         </Link>
 
       </div>

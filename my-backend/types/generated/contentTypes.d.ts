@@ -1004,7 +1004,7 @@ export interface ApiProjectSiteProjectSite extends Struct.CollectionTypeSchema {
       'api::project-member.project-member'
     >;
     project_status: Schema.Attribute.Enumeration<
-      ['active', 'closed', 'pending']
+      ['active', 'closed', 'pending', 'survey']
     > &
       Schema.Attribute.DefaultTo<'active'>;
     publishedAt: Schema.Attribute.DateTime;
@@ -1013,6 +1013,10 @@ export interface ApiProjectSiteProjectSite extends Struct.CollectionTypeSchema {
       'api::return-request.return-request'
     >;
     start_date: Schema.Attribute.Date;
+    survey_logs: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::survey-log.survey-log'
+    >;
     team_members: Schema.Attribute.Relation<
       'manyToMany',
       'plugin::users-permissions.user'
@@ -1101,6 +1105,44 @@ export interface ApiStockLocationStockLocation
   };
 }
 
+export interface ApiSurveyLogSurveyLog extends Struct.CollectionTypeSchema {
+  collectionName: 'survey_logs';
+  info: {
+    displayName: 'SurveyLog';
+    pluralName: 'survey-logs';
+    singularName: 'survey-log';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.Text;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::survey-log.survey-log'
+    > &
+      Schema.Attribute.Private;
+    photos: Schema.Attribute.Media<
+      'images' | 'files' | 'videos' | 'audios',
+      true
+    >;
+    project_site: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::project-site.project-site'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    severity: Schema.Attribute.Enumeration<['Normal', 'Critical', 'Info']>;
+    topic: Schema.Attribute.String;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiTagTag extends Struct.CollectionTypeSchema {
   collectionName: 'tags';
   info: {
@@ -1154,7 +1196,7 @@ export interface ApiTaskLogTaskLog extends Struct.CollectionTypeSchema {
     > &
       Schema.Attribute.Private;
     Log_Type: Schema.Attribute.Enumeration<
-      ['Progress', 'Defect', 'Photo', 'Info']
+      ['Progress', 'Defect', 'Photo', 'Info', 'Requirement', 'Observation']
     >;
     Media: Schema.Attribute.Media<
       'images' | 'files' | 'videos' | 'audios',
@@ -1924,6 +1966,7 @@ declare module '@strapi/strapi' {
       'api::project-site.project-site': ApiProjectSiteProjectSite;
       'api::return-request.return-request': ApiReturnRequestReturnRequest;
       'api::stock-location.stock-location': ApiStockLocationStockLocation;
+      'api::survey-log.survey-log': ApiSurveyLogSurveyLog;
       'api::tag.tag': ApiTagTag;
       'api::task-log.task-log': ApiTaskLogTaskLog;
       'api::transaction.transaction': ApiTransactionTransaction;
