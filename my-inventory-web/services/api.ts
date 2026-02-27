@@ -1089,45 +1089,44 @@ export const getSurveyLogs = async (projectDocId: string) => {
 
 // 2. สร้าง Survey Log ใหม่ (พร้อมอัปโหลดรูป)
 // services/api.ts
-// services/api.ts
 
 export const createSurveyLog = async (data: { 
   topic: string; 
   description: string; 
   severity: string; 
-  project_site: string; // Document ID (รหัสยาว)
+  project_site: string; 
   files?: File[]; 
 }) => {
   try {
     let photoIds: number[] = [];
-
-    // ✅ จังหวะที่ 1: อัปโหลดรูปขึ้นไปก่อน (ถ้ามี)
     if (data.files && data.files.length > 0) {
-      // ใช้ฟังก์ชัน uploadFilesOnly ที่มีอยู่แล้วในไฟล์นี้
       const uploadedMedia = await uploadFilesOnly(data.files);
       photoIds = uploadedMedia.map((file: any) => file.id);
     }
 
-    // ✅ จังหวะที่ 2: บันทึกข้อมูลเป็น JSON ธรรมดา (ลดปัญหา Multipart/Boundary)
     const payload = {
       data: {
         topic: data.topic,
         description: data.description,
-        severity: data.severity, // ค่าต้องตรงกับที่ตั้งใน Strapi (เช่น Normal, Critical)
+        severity: data.severity, 
+        // ✅ ตรวจสอบว่าใน Strapi ชื่อฟิลด์คือ project_site (Relation)
         project_site: data.project_site, 
-        photos: photoIds // ผูก ID รูปที่อัปโหลดเสร็จแล้ว
+        photos: photoIds,
+        publishedAt: new Date().toISOString() // บังคับ Publish ทันที
       }
     };
 
-    // ส่งแบบ JSON ปกติ ไม่ต้องใส่ Headers เพิ่มเติม
     const response = await apiClient.post('/survey-logs', payload);
     return response.data;
-
-  } catch (error) {
-    console.error("❌ Survey Log Error:", error);
+  } catch (error: any) {
+    // พิมพ์ Error ออกมาดูว่า Strapi บ่นเรื่องฟิลด์ไหน
+    console.error("❌ Survey Log API Error Details:", error.response?.data);
     throw error;
   }
 };
+
+
+
 
 
 // --- เพิ่มต่อท้ายไฟล์ services/api.ts ---
@@ -1159,4 +1158,34 @@ export const getProjectById = async (documentId: string) => {
       return normalizeStrapiData(data[0]); // ✅ คืนค่าตัวแรก
   }
   return null;
+};
+
+// --- โค้ดสำหรับวางต่อท้าย services/api.ts ---
+
+// 3. แก้ไข Survey Log
+export const updateSurveyLog = async (documentId: string, data: any) => {
+  try {
+    const payload = {
+      data: {
+        topic: data.topic,
+        description: data.description,
+        severity: data.severity
+      }
+    };
+    const response = await apiClient.put(`/survey-logs/${documentId}`, payload);
+    return response.data;
+  } catch (error) {
+    console.error("❌ Update Survey Log Error:", error);
+    throw error;
+  }
+};
+
+// 4. ลบ Survey Log
+export const deleteSurveyLog = async (documentId: string) => {
+  try {
+    return await apiClient.delete(`/survey-logs/${documentId}`);
+  } catch (error) {
+    console.error("❌ Delete Survey Log Error:", error);
+    throw error;
+  }
 };

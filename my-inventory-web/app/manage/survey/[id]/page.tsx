@@ -1,7 +1,6 @@
-// app/manage/survey/[id]/page.tsx
 "use client";
 
-import { useEffect, useState, use, useMemo, useRef, useCallback } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { STRAPI_URL } from "@/services/config";
 import { useAuth } from "@/app/context/AuthContext";
@@ -15,14 +14,14 @@ import {
   updateProjectMember,
   deleteProjectMember,
   getAllUsers,
-  fetchProjectLogs
 } from "@/services/api";
 
-// ✅ Reuse Components จากโฟลเดอร์ Project (ไม่ต้องสร้างใหม่)
+// ✅ Reuse Components จากโฟลเดอร์ Project 
 import ProjectHeader from "../../project/[id]/components/ProjectHeader";
-import ReportModal from "../../project/[id]/components/ReportModal";
+// 🟢 Import Component ใหม่ที่เราเพิ่งสร้าง
+import { SurveyFeed } from "../components/SurveyFeed";
 
-// --- Helper Functions & Icons (คงเดิมไว้) ---
+// --- Helper Functions & Icons ---
 const getUserColor = (name: string) => {
     if (!name) return { bg: "bg-slate-100", text: "text-slate-600", avatar: "bg-slate-500", border: "border-slate-300", glow: "ring-slate-200 shadow-slate-300" };
     const themes = [
@@ -50,13 +49,6 @@ export default function SurveyDashboardPage({ params }: { params: Promise<{ id: 
   const [members, setMembers] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  // Site Logs Logic
-  const [siteLogs, setSiteLogs] = useState<any[]>([]);
-  const [logPage, setLogPage] = useState(1);
-  const [hasMoreLogs, setHasMoreLogs] = useState(true);
-  const [loadingLogs, setLoadingLogs] = useState(false);
-  const observer = useRef<IntersectionObserver | null>(null);
 
   // Modals
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -67,36 +59,10 @@ export default function SurveyDashboardPage({ params }: { params: Promise<{ id: 
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<any>(null);
   const [memberForm, setMemberForm] = useState({ userId: "", role: "", responsibility: "", start_date: "", end_date: "" });
-  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   const isAdmin = user?.role?.name === 'Admin' || user?.role?.type === 'admin';
   const isOwner = !!user && !!project?.creator && project.creator.id === user.id;
   const canManage = !!user && (isAdmin || isOwner);
-
-  // --- Infinite Scroll Logic ---
-  const loadLogs = async (page: number, reset: boolean = false) => {
-      try {
-          setLoadingLogs(true);
-          const res = await fetchProjectLogs(projectId, page, 5);
-          if (reset) setSiteLogs(res.data); else setSiteLogs(prev => [...prev, ...res.data]);
-          setHasMoreLogs(res.meta?.pagination?.page < res.meta?.pagination?.pageCount);
-      } catch (error) { console.error(error); } finally { setLoadingLogs(false); }
-  };
-
-  const lastLogElementRef = useCallback((node: any) => {
-    if (loadingLogs) return;
-    if (observer.current) observer.current.disconnect();
-    observer.current = new IntersectionObserver(entries => {
-        if (entries[0].isIntersecting && hasMoreLogs) {
-            setLogPage(prev => {
-                const next = prev + 1;
-                loadLogs(next);
-                return next;
-            });
-        }
-    });
-    if (node) observer.current.observe(node);
-  }, [loadingLogs, hasMoreLogs, projectId]);
 
   const loadProjectData = async () => {
     try {
@@ -107,19 +73,7 @@ export default function SurveyDashboardPage({ params }: { params: Promise<{ id: 
     } catch (error) { console.error(error); } finally { setLoading(false); }
   };
 
-  useEffect(() => { if (projectId) { loadProjectData(); loadLogs(1, true); setLogPage(1); } }, [projectId]);
-
-  const groupedLogs = useMemo(() => {
-    const groups: { [key: string]: any[] } = {};
-    if (Array.isArray(siteLogs)) {
-        siteLogs.forEach((log) => {
-            const dateKey = new Date(log.action_date || log.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
-            if (!groups[dateKey]) groups[dateKey] = [];
-            groups[dateKey].push(log);
-        });
-    }
-    return Object.entries(groups).sort((a, b) => new Date(b[1][0].action_date || b[1][0].createdAt).getTime() - new Date(a[1][0].action_date || a[1][0].createdAt).getTime());
-  }, [siteLogs]);
+  useEffect(() => { if (projectId) { loadProjectData(); } }, [projectId]);
 
   // Handlers
   const handleCreateJob = async (e: React.FormEvent) => { e.preventDefault(); try { setSubmitting(true); await createJob(newJobTitle, project.documentId); setNewJobTitle(""); setIsCreateOpen(false); await loadProjectData(); } catch (error) { alert("ล้มเหลว"); } finally { setSubmitting(false); } };
@@ -133,11 +87,11 @@ export default function SurveyDashboardPage({ params }: { params: Promise<{ id: 
   return (
     <div className="min-h-screen bg-slate-50 pb-32 font-sans relative">
       
-      {/* 🟢 Header: ใช้ Component เดิม แต่ส่ง project เข้าไป */}
+      {/* 🟢 Header: ใช้ Component เดิม */}
       <ProjectHeader 
          project={project}
          members={members} 
-         onOpenReport={() => setIsReportModalOpen(true)} 
+         onOpenReport={() => {}} // ❌ เอาปุ่มเปิด Report ออกชั่วคราว เพราะ Report เดิมผูกกับ TaskLog 
       />
 
       <main className="max-w-md mx-auto px-4 relative z-10 space-y-6 mt-4">
@@ -154,110 +108,52 @@ export default function SurveyDashboardPage({ params }: { params: Promise<{ id: 
             </div>
         </section>
 
-        {/* 🟣 SURVEY JOBS: หมวดงานสำรวจ */}
+        {/* 🟣 SURVEY JOBS: หมวดงาน */}
         <section className="space-y-4">
-            <h2 className="font-black text-violet-800 px-2 text-lg uppercase tracking-wider font-sans">📋 หัวข้อการสำรวจ</h2>
+            <h2 className="font-black text-violet-800 px-2 text-lg uppercase tracking-wider font-sans">📋 ขอบเขตการประเมิน</h2>
             {Array.isArray(project?.jobs) && project.jobs.map((job: any) => { 
                 const tasks = Array.isArray(job.job_tasks) ? job.job_tasks : [];
-                // ใน Survey Mode เราอาจจะไม่เน้น % Progress แต่เน้นจำนวนหัวข้อ
                 return (
                   <div key={job.documentId} className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-violet-100 relative group transition-all hover:shadow-md">
                     <div className="mb-4 pr-16">
                       <h3 className="font-black text-slate-800 text-lg truncate font-sans">{job.title}</h3>
                       <div className="flex items-center gap-2 mt-2 text-xs text-slate-500">
-                         <span>📝 {tasks.length} รายการย่อย</span>
+                         <span>📝 {tasks.length} รายการย่อยที่ต้องเช็ค</span>
                       </div>
                     </div>
                     {canManage && <div className="absolute top-6 right-6 flex gap-1 opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => {setEditingJob(job); setIsEditOpen(true);}} className="p-2 text-slate-300 hover:text-violet-600"><Icons.Edit /></button><button onClick={(e) => handleDeleteJob(e, job.documentId, job.title)} className="p-2 text-slate-300 hover:text-red-500"><Icons.Trash /></button></div>}
-                    <Link href={`/manage/project/${projectId}/job/${job.documentId}`} className="flex items-center justify-between w-full bg-violet-50 border-2 border-violet-100 hover:border-violet-500 text-violet-600 px-6 py-4 rounded-2xl text-sm font-black transition-all shadow-sm active:scale-[0.97] group">
-                       <span className="flex items-center gap-2">🔍 เข้าไปบันทึกข้อมูล</span>
+                    
+                    {/* ✅ คืนชีพ Link สำหรับกดเข้าไปดูรายการย่อย */}
+                    <Link href={`/manage/project/${projectId}/job/${job.documentId}`} className="flex items-center justify-between w-full bg-violet-50 border-2 border-violet-100 hover:border-violet-500 text-violet-600 px-6 py-4 rounded-2xl text-sm font-black transition-all shadow-sm active:scale-[0.97] group mt-4">
+                       <span className="flex items-center gap-2">🔍 เข้าไปจัดการรายการย่อย</span>
                        <span className="text-2xl group-hover:translate-x-1 transition-transform">→</span>
                     </Link>
+
                   </div>
                 );
             })}
         </section>
 
-        {/* 🟣 SURVEY DIARY: บันทึกหน้างาน */}
-        <section className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100 mb-20">
-            <h2 className="font-black text-slate-800 mb-8 flex items-center gap-2 text-lg font-sans">
-              📔 Survey Log <span className="bg-violet-500 text-white text-[10px] px-2 py-0.5 rounded-full shadow-md shadow-violet-200">Real-time</span>
+        {/* 🟢 THE NEW SURVEY FEED: วาง Component SurveyFeed ไว้ตรงนี้ */}
+        <section className="mb-20 mt-8">
+            <h2 className="font-black text-slate-800 px-2 mb-6 flex items-center gap-2 text-lg font-sans">
+              📔 บันทึกการสำรวจ (Survey Logs)
             </h2>
-            <div className="relative pl-2 space-y-10">
-                {groupedLogs.map(([dateKey, logs], gIdx) => (
-                    <div key={dateKey}>
-                        <div className="flex items-center gap-2 mb-5"><div className="w-3 h-3 rounded-full bg-violet-500 ring-4 ring-violet-50 shrink-0"></div><span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{dateKey}</span></div>
-                        <div className="space-y-4 ml-4">
-                            {logs.map((log: any, lIdx) => {
-                                // Logic แสดงผล Survey Log (เน้น Requirement / Observation)
-                                const isReq = log.Log_Type === 'Requirement';
-                                const isObs = log.Log_Type === 'Observation';
-                                const hasMedia = log.Media && log.Media.length > 0;
-                                
-                                let cardStyle = 'bg-white border-slate-100 hover:shadow-xl hover:shadow-slate-200/50';
-                                let textStyle = 'text-slate-800';
-                                let descStyle = 'text-slate-500';
-                                let icon = "📝";
-
-                                if (isReq) { cardStyle = 'bg-purple-50 border-purple-200 shadow-inner'; textStyle = 'text-purple-800'; descStyle = 'text-purple-700'; icon = "💎"; } 
-                                else if (isObs) { cardStyle = 'bg-orange-50 border-orange-200 shadow-inner'; textStyle = 'text-orange-800'; descStyle = 'text-orange-700'; icon = "👀"; }
-
-                                return (
-                                    <Link 
-                                        key={`${log.documentId}-${gIdx}-${lIdx}`} 
-                                        href={`/manage/project/${projectId}/job/${log.jobId}/task/${log.taskId}`}
-                                        ref={(gIdx === groupedLogs.length - 1 && lIdx === logs.length - 1) ? lastLogElementRef : null}
-                                        className={`block p-5 rounded-[2rem] border transition-all ${cardStyle}`}
-                                    >
-                                        <div className="flex gap-4">
-                                            {hasMedia ? (<div className="w-16 h-16 rounded-2xl bg-slate-100 shrink-0 overflow-hidden border border-slate-100 shadow-sm"><img src={log.Media[0].url.startsWith('http') ? log.Media[0].url : `${STRAPI_URL}${log.Media[0].url}`} className="w-full h-full object-cover" /></div>) 
-                                            : (<div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 text-2xl bg-white shadow-sm`}>{icon}</div>)}
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex justify-between items-start mb-1.5">
-                                                    <h4 className={`text-sm font-black truncate leading-tight font-sans ${textStyle}`}>
-                                                        {log.taskName} 
-                                                        {isReq ? (<span className="text-[10px] text-purple-600 font-black ml-1.5 bg-purple-100 px-2 py-0.5 rounded-full shadow-sm">SPEC</span>) 
-                                                        : isObs ? (<span className="text-[10px] text-orange-600 font-black ml-1.5 bg-orange-100 px-2 py-0.5 rounded-full shadow-sm">NOTE</span>) 
-                                                        : null}
-                                                    </h4>
-                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">{new Date(log.action_date || log.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</span>
-                                                </div>
-                                                <p className={`text-[11px] truncate-2-lines leading-relaxed font-bold font-sans ${descStyle}`}>{log.Description}</p>
-                                            </div>
-                                        </div>
-                                    </Link>
-                                );
-                            })}
-                        </div>
-                    </div>
-                ))}
-                {loadingLogs && <div className="text-center py-4 text-xs text-slate-300 animate-pulse font-bold font-sans tracking-widest uppercase">Loading logs...</div>}
-                {!hasMoreLogs && siteLogs.length > 0 && <div className="text-center py-4 text-[10px] font-black text-slate-200 uppercase tracking-widest font-sans">End of survey logs</div>}
-            </div>
+            <SurveyFeed projectDocId={projectId} projectIntId={project?.id || 0} />
         </section>
 
       </main>
 
-      {/* Floating Action Button for Survey */}
+      {/* Floating Action Button for Adding Job Category */}
       {canManage && <button onClick={() => {setNewJobTitle(""); setIsCreateOpen(true);}} className="fixed bottom-8 right-6 w-16 h-16 bg-violet-600 text-white rounded-full shadow-2xl flex items-center justify-center text-4xl z-[999] active:scale-95 transition-transform font-light shadow-violet-600/40">+</button>}
-      
-      {/* Report Modal */}
-      <ReportModal 
-          isOpen={isReportModalOpen}
-          onClose={() => setIsReportModalOpen(false)}
-          project={project}
-          members={members}
-          siteLogs={siteLogs}
-          projectId={projectId}
-      />
 
       {/* Create Modal */}
       {isCreateOpen && (
         <div className="fixed inset-0 bg-black/60 z-[1000] flex items-end sm:items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in slide-in-from-bottom-10">
-            <h3 className="font-black text-xl mb-6 text-slate-800 tracking-tight font-sans text-center">📋 เพิ่มหัวข้อสำรวจ</h3>
+            <h3 className="font-black text-xl mb-6 text-slate-800 tracking-tight font-sans text-center">📋 เพิ่มขอบเขตการประเมิน</h3>
             <form onSubmit={handleCreateJob} className="space-y-4">
-              <input type="text" placeholder="ชื่อหัวข้อ (เช่น สำรวจโครงสร้าง)" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 outline-none font-black text-slate-700 focus:ring-2 focus:ring-violet-100" value={newJobTitle} onChange={e => setNewJobTitle(e.target.value)} autoFocus />
+              <input type="text" placeholder="ชื่อขอบเขต (เช่น สำรวจโครงสร้างหลังคา)" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 outline-none font-black text-slate-700 focus:ring-2 focus:ring-violet-100" value={newJobTitle} onChange={e => setNewJobTitle(e.target.value)} autoFocus />
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setIsCreateOpen(false)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black uppercase text-xs tracking-widest shadow-sm">ยกเลิก</button>
                 <button type="submit" disabled={submitting} className="flex-1 py-4 bg-violet-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl">สร้าง</button>
@@ -267,11 +163,11 @@ export default function SurveyDashboardPage({ params }: { params: Promise<{ id: 
         </div>
       )}
 
-      {/* Edit Modal (Logic เดิม แต่เปลี่ยนสี Theme) */}
+      {/* Edit Modal */}
       {isEditOpen && editingJob && (
         <div className="fixed inset-0 bg-black/50 z-[1000] flex items-end sm:items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95">
-            <h3 className="font-black text-xl mb-6 text-slate-800 font-sans text-center">✏️ แก้ไขหัวข้อ</h3>
+            <h3 className="font-black text-xl mb-6 text-slate-800 font-sans text-center">✏️ แก้ไข</h3>
             <form onSubmit={handleUpdateJob} className="space-y-4">
               <input type="text" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 outline-none font-black text-slate-700 focus:ring-2 focus:ring-violet-100" value={editingJob.title} onChange={e => setEditingJob({...editingJob, title: e.target.value})} />
               <div className="flex gap-3 pt-2">
@@ -283,7 +179,7 @@ export default function SurveyDashboardPage({ params }: { params: Promise<{ id: 
         </div>
       )}
 
-      {/* Member Modal (Logic เดิม) */}
+      {/* Member Modal */}
       {isMemberModalOpen && (
         <div className="fixed inset-0 bg-black/60 z-[1000] flex items-end sm:items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in slide-in-from-bottom-10 h-[80vh] overflow-y-auto">
