@@ -32,7 +32,8 @@
       "enum": [
         "Normal",
         "Critical",
-        "Info"
+        "Info",
+        "Area"
       ]
     },
     "project_site": {

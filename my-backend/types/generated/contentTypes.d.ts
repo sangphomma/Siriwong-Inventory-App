@@ -1135,7 +1135,9 @@ export interface ApiSurveyLogSurveyLog extends Struct.CollectionTypeSchema {
       'api::project-site.project-site'
     >;
     publishedAt: Schema.Attribute.DateTime;
-    severity: Schema.Attribute.Enumeration<['Normal', 'Critical', 'Info']>;
+    severity: Schema.Attribute.Enumeration<
+      ['Normal', 'Critical', 'Info', 'Area']
+    >;
     topic: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
