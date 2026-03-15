@@ -1,3 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+
+
 // services/api.ts
 
 import axios from 'axios';
@@ -149,8 +153,6 @@ export const fetchProjectJobs = async (projectDocId: string) => {
   }
 };
 
-// services/api.ts
-
 // 1. เพิ่ม project_status?: string ใน Type Definition
 export const createProject = async (data: { 
   name: string, 
@@ -175,8 +177,6 @@ export const createProject = async (data: {
     }
   });
 };
-
-// services/api.ts
 
 // 1. เพิ่ม project_status?: string ใน Type Definition เช่นกัน
 export const updateProject = async (projectDocId: string, data: { 
@@ -205,6 +205,29 @@ export const updateProject = async (projectDocId: string, data: {
 
 export const deleteProject = async (projectDocId: string) => {
     return await apiClient.delete(`/project-sites/${projectDocId}`);
+};
+
+export const getProjectById = async (documentId: string) => {
+  const query = {
+    filters: {
+      documentId: { $eq: documentId } 
+    },
+    populate: {
+      customer: true,       
+      creator: { fields: ['username'] }, 
+    },
+  };
+  
+  const response = await apiClient.get(`/project-sites`, {
+    params: query,
+    paramsSerializer: (params) => qs.stringify(params, { encodeValuesOnly: true }),
+  });
+  
+  const data = response.data.data;
+  if (Array.isArray(data) && data.length > 0) {
+      return normalizeStrapiData(data[0]); 
+  }
+  return null;
 };
 
 // ==========================================
@@ -355,7 +378,6 @@ export const createTaskLog = async (jobTaskDocId: string, data: any) => {
   try {
     let mediaIds: any[] = [];
     if (data.photos && data.photos.length > 0) {
-       // ใช้ฟังก์ชัน uploadFilesOnly ที่มีอยู่แล้วได้เลย
        const uploadedFiles = await uploadFilesOnly(data.photos);
        mediaIds = uploadedFiles.map((f: any) => f.id);
     }
@@ -501,12 +523,13 @@ export const getRoles = async () => {
 // ==========================================
 
 export const getProjectMembers = async (projectDocId: string) => {
+  // 1. Query ปกติ แต่ระวัง populate
   const query = {
     filters: { project_site: { documentId: { $eq: projectDocId } } },
     populate: {
       user: {
         fields: ['username', 'email', 'position'], 
-        populate: { avatar: true } 
+        populate: { avatar: true } // แยกรูปภาพออกมา
       }
     },
     sort: ['start_date:desc']
@@ -517,7 +540,10 @@ export const getProjectMembers = async (projectDocId: string) => {
     paramsSerializer: (params) => qs.stringify(params, { encodeValuesOnly: true }),
   });
 
+  // 2. Normalize ชั้นแรก
   const members = response.data.data.map(normalizeStrapiData);
+
+  // 3. ✅ FORCE UNWRAP (ทีเด็ด): แกะกล่อง User อีกรอบให้ชัวร์
   return members.map((m: any) => {
       if (m.user && m.user.data) {
           m.user = normalizeStrapiData(m.user.data);
@@ -601,7 +627,6 @@ export const getGalleryPhotos = async (galleryId: string) => {
     const cleanPhotos = rawPhotos.map((item: any) => {
         const attrs = item.attributes || item; 
         
-        // Fix URL
         let url = attrs.url;
         if (url && url.startsWith('/')) {
             url = `${STRAPI_URL}${url}`;
@@ -622,7 +647,6 @@ export const getGalleryPhotos = async (galleryId: string) => {
   }
 };
 
-// ✅ ฟังก์ชันเพิ่มรูป (Connect)
 export const addPhotosToGallery = async (galleryDocId: string, newPhotoIds: string[]) => {
     return await apiClient.put(`/project-galleries/${galleryDocId}`, {
         data: {
@@ -633,7 +657,6 @@ export const addPhotosToGallery = async (galleryDocId: string, newPhotoIds: stri
     });
 };
 
-// ✅ ฟังก์ชันลบรูป (Disconnect)
 export const removePhotoFromGallery = async (galleryId: string, photoId: string) => {
     return await apiClient.put(`/project-galleries/${galleryId}`, {
         data: {
@@ -878,7 +901,6 @@ export const getUserActivities = async (userId: string | number, dateString: str
       const projectData = act.project_site || act.project_sites; 
       const realProject = Array.isArray(projectData) ? projectData[0] : projectData;
 
-      // แก้ URL รูปภาพ
       const fixedPhotos = (act.photos || []).map((photo: any) => {
          if (photo.url && photo.url.startsWith('/')) {
             return { ...photo, url: `${STRAPI_URL}${photo.url}` };
@@ -886,18 +908,15 @@ export const getUserActivities = async (userId: string | number, dateString: str
          return photo;
       });
 
-      // 🔥 LOGIC ใหม่: รวมร่าง "ชื่อโปรเจกต์" + "(ชื่อเขต)"
       let displayLocation = "ไม่ระบุสถานที่";
       
       if (realProject) {
-          // ถ้าเป็นโปรเจกต์ และมีข้อมูลเขต (locationText) ให้เอามาวงเล็บต่อท้าย
           if (act.location_text) {
               displayLocation = `${realProject.name} (${act.location_text})`;
           } else {
               displayLocation = realProject.name;
           }
       } else {
-          // ถ้าไม่ใช่โปรเจกต์ ก็ใช้ชื่อสถานที่ปกติ
           displayLocation = act.location_text || "ไม่ระบุสถานที่";
       }
 
@@ -909,10 +928,7 @@ export const getUserActivities = async (userId: string | number, dateString: str
         type: act.activity_type,
         startTime: act.start_time?.substring(0, 5), 
         endTime: act.end_time?.substring(0, 5) || null,
-        
-        // ✅ ใช้ค่าที่เราคำนวณใหม่ตรงนี้
         location: displayLocation,
-        
         projectId: realProject?.documentId || realProject?.id || "",
         locationText: act.location_text || "", 
         coordinates: act.coordinates || null, 
@@ -1001,30 +1017,20 @@ export const deleteUserActivity = async (docId: string) => {
   return await apiClient.delete(`/user-activities/${docId}`);
 };
 
-// services/api.ts
-// services/api.ts
-
 export const generateLineReport = async (userId: string | number, dateString: string) => {
   try {
-    // 1. ดึงข้อมูล User มาก่อน (เพื่อเอาชื่อและตำแหน่ง)
     const userRes = await apiClient.get(`/users/${userId}?populate=role`);
     const userData = userRes.data;
-    
-    // ตั้งค่า Default ถ้าไม่มีข้อมูล
     const userName = userData.username || "พนักงาน";
-    // const userPos = userData.position || "Staff"; 
 
-    // 2. ดึงกิจกรรม
     const activities = await getUserActivities(userId, dateString);
     if (!activities || activities.length === 0) return "วันนี้ยังไม่มีบันทึกกิจกรรมครับ";
 
-    // 3. เริ่มสร้างรายงานตามฟอร์แมตที่ต้องการ
     let report = `📅 *แผนการทำงานประจำวัน (${dateString})*\n`;
     report += `ชื่อ ${userName}\n`;
     report += `--------------------------------\n`;
 
     activities.forEach((act: any) => {
-      // เลือกไอคอนตามประเภทงาน
       let icon = '✅';
       if (act.type === 'Travel') icon = '🚗';
       if (act.type === 'Meeting') icon = '👥';
@@ -1035,26 +1041,18 @@ export const generateLineReport = async (userId: string | number, dateString: st
       
       report += `${icon} *${time}* : ${act.title}\n`;
       
-      // แสดงสถานที่
       if (act.location && act.location !== "ไม่ระบุสถานที่") {
          report += `   📍 ${act.location}\n`;
       }
-      
-      // แสดงรายละเอียด
       if (act.details) {
          report += `   📝 ${act.details}\n`;
       }
-      
       report += `\n`;
     });
 
     report += `-----------------------------\n`;
     report += `ดูรายละเอียดอัพเดตงานได้ที่\n`;
-    
-    // ✅ แก้ไขตรงนี้: เปลี่ยนลิงก์ไปหน้า View พร้อมแนบ uid และ name
-    // ใช้ encodeURIComponent เพื่อรองรับชื่อภาษาไทยใน URL
     report += `https://siriwong.online/manage/schedule/view?uid=${userId}&name=${encodeURIComponent(userName)}\n`; 
-    
     report += `(หากเปิดไม่ได้ ให้กดจุด 3 จุดมุมขวาบน เลือก 'Open in external browser')\n`;
     report += `--------------------------------\n`;
     report += `#SiriwongInventory`;
@@ -1067,16 +1065,17 @@ export const generateLineReport = async (userId: string | number, dateString: st
   }
 };
 
-// --- SURVEY LOG SYSTEM (New) ---
+// ==========================================
+// 📋 SURVEY LOG SYSTEM (New) 
+// ==========================================
 
-// 1. ดึงข้อมูล Survey Logs ทั้งหมดของโปรเจกต์
 export const getSurveyLogs = async (projectDocId: string) => {
   const query = {
     filters: { 
-      project_site: { documentId: { $eq: projectDocId } } // กรองตาม Project
+      project_site: { documentId: { $eq: projectDocId } } 
     },
-    populate: ['photos'], // ดึงรูปภาพมาด้วย
-    sort: ['createdAt:desc'] // เรียงจากใหม่ไปเก่า
+    populate: ['photos'], 
+    sort: ['createdAt:desc'] 
   };
 
   const response = await apiClient.get('/survey-logs', {
@@ -1086,9 +1085,6 @@ export const getSurveyLogs = async (projectDocId: string) => {
 
   return response.data.data;
 };
-
-// 2. สร้าง Survey Log ใหม่ (พร้อมอัปโหลดรูป)
-// services/api.ts
 
 export const createSurveyLog = async (data: { 
   topic: string; 
@@ -1109,60 +1105,20 @@ export const createSurveyLog = async (data: {
         topic: data.topic,
         description: data.description,
         severity: data.severity, 
-        // ✅ ตรวจสอบว่าใน Strapi ชื่อฟิลด์คือ project_site (Relation)
         project_site: data.project_site, 
         photos: photoIds,
-        publishedAt: new Date().toISOString() // บังคับ Publish ทันที
+        publishedAt: new Date().toISOString() 
       }
     };
 
     const response = await apiClient.post('/survey-logs', payload);
     return response.data;
   } catch (error: any) {
-    // พิมพ์ Error ออกมาดูว่า Strapi บ่นเรื่องฟิลด์ไหน
     console.error("❌ Survey Log API Error Details:", error.response?.data);
     throw error;
   }
 };
 
-
-
-
-
-// --- เพิ่มต่อท้ายไฟล์ services/api.ts ---
-
-// services/api.ts (ท้ายไฟล์)
-
-// 1. ดึงข้อมูล Project (ฉบับแก้ไข: ใช้ Filter documentId + แก้ Populate)
-export const getProjectById = async (documentId: string) => {
-  const query = {
-    filters: {
-      documentId: { $eq: documentId } // ✅ ใช้ Filter แทนการใส่ ID ใน URL
-    },
-    populate: {
-      customer: true,       // ดึงลูกค้า
-      creator: { fields: ['username'] }, // ดึงคนสร้าง (Owner)
-      // ❌ project_site: true  <-- ลบบรรทัดนี้ทิ้ง (ตัวการ Error)
-    },
-  };
-  
-  // ยิงไปที่ /project-sites ธรรมดา (ได้มาเป็น Array)
-  const response = await apiClient.get(`/project-sites`, {
-    params: query,
-    paramsSerializer: (params) => qs.stringify(params, { encodeValuesOnly: true }),
-  });
-  
-  // ดึงตัวแรกของ Array ออกมา (และ Normalize ถ้าจำเป็น)
-  const data = response.data.data;
-  if (Array.isArray(data) && data.length > 0) {
-      return normalizeStrapiData(data[0]); // ✅ คืนค่าตัวแรก
-  }
-  return null;
-};
-
-// --- โค้ดสำหรับวางต่อท้าย services/api.ts ---
-
-// 3. แก้ไข Survey Log
 export const updateSurveyLog = async (documentId: string, data: any) => {
   try {
     const payload = {
@@ -1180,12 +1136,37 @@ export const updateSurveyLog = async (documentId: string, data: any) => {
   }
 };
 
-// 4. ลบ Survey Log
 export const deleteSurveyLog = async (documentId: string) => {
   try {
     return await apiClient.delete(`/survey-logs/${documentId}`);
   } catch (error) {
     console.error("❌ Delete Survey Log Error:", error);
     throw error;
+  }
+};
+
+// ==========================================
+// 📚 DICTIONARY API (ระบบจดจำคำศัพท์)
+// ==========================================
+
+export const fetchDictionary = async (category: string) => {
+  try {
+    const response = await apiClient.get(`/dictionaries?filters[category][$eq]=${category}&pagination[limit]=100`);
+    const rawData = response.data?.data || [];
+    return rawData.map((item: any) => item.attributes?.word || item.word || "");
+  } catch (error) {
+    console.error("Error fetching dictionary:", error);
+    return []; 
+  }
+};
+
+export const createDictionaryWord = async (word: string, category: string) => {
+  try {
+    await apiClient.post(`/dictionaries`, {
+      data: { word: word, category: category }
+    });
+    return true;
+  } catch (error) {
+    return false;
   }
 };

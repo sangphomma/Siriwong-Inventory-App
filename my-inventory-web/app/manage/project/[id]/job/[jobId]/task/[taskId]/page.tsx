@@ -9,10 +9,43 @@ import {
   createTaskLog, 
   updateTaskLog, 
   deleteTaskLog,
-  fetchProjectJobs 
+  fetchProjectJobs ,
+  fetchDictionary,         // ✨ เพิ่มตัวนี้
+  createDictionaryWord     // ✨ เพิ่มตัวนี้
 } from "@/services/api";
 import { STRAPI_URL } from "@/services/config";
 import { resizeImage } from "@/utils/imageResizer"; 
+import { SmartInput } from "@/app/components/SmartInput"; // ปรับ Path ตามจริงของคุณกร
+
+
+
+
+
+// ✅ เพิ่มพิมพ์เขียวสำหรับ รูปภาพ
+interface MediaImage {
+  id: number;
+  url: string;
+}
+// ✅ เพิ่มพิมพ์เขียวสำหรับ Log ของงาน
+interface TaskLog {
+  id: number;
+  documentId: string;
+  Description?: string;
+  problems_found?: string;
+  progress_percentage?: number;
+  Log_Type?: 'Progress' | 'Info' | 'Defect' | 'Requirement' | 'Observation';
+  action_date?: string;
+  createdAt: string;
+  Media?: MediaImage[];
+}
+
+// ✅ เพิ่มพิมพ์เขียวสำหรับ งาน (Task)
+interface Task {
+  documentId: string;
+  task_name: string;
+  progress: number;
+  task_logs: TaskLog[];
+}
 
 // ✅ 1. ปรับ Interface ให้รองรับ Type ใหม่
 interface LogFormData {
@@ -22,7 +55,7 @@ interface LogFormData {
   progress: number;
   logType: 'Progress' | 'Info' | 'Defect' | 'Requirement' | 'Observation'; // 👈 เพิ่มตรงนี้
   newPhotos: File[];
-  existingImages: any[];
+  existingImages:MediaImage[];
   action_date: string;
 }
 
@@ -47,10 +80,14 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
   const { id: projectId, jobId, taskId } = use(params);
   const { user } = useAuth();
   
-  const [task, setTask] = useState<any>(null);
+  const [task, setTask] = useState<Task | null>(null);
   const [projectOwnerId, setProjectOwnerId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  // ✨ 1. State สำหรับเก็บคำแนะนำที่ดึงจาก Strapi
+  const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>([]);
+
+  
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
@@ -65,6 +102,18 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
     action_date: new Date().toISOString().slice(0, 16)
   });
 
+  // ✨ 2. ดึงคำศัพท์จาก Strapi ทุกครั้งที่เปลี่ยน Tab (Progress, Defect, ฯลฯ)
+  useEffect(() => {
+    const loadDictionary = async () => {
+      const categoryName = `TaskLog_${formData.logType}`; // ระบุหมวดหมู่ เช่น TaskLog_Progress
+      const words = await fetchDictionary(categoryName);
+      setDynamicSuggestions(words);
+    };
+    if (isFormOpen) {
+      loadDictionary();
+    }
+  }, [formData.logType, isFormOpen]);
+
   const isAdmin = user?.role?.name === 'Admin' || user?.role?.type === 'admin';
   const isOwner = !!user && !!projectOwnerId && (user.id === projectOwnerId);
   const canManage = !!user && (isAdmin || isOwner);
@@ -78,11 +127,11 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
       ]);
       setTask(taskData);
       if (projectData) {
-        const owner = projectData.creator?.id || projectData.find((p:any) => p.documentId === projectId)?.creator?.id;
+        const owner = projectData.creator?.id || projectData.find((p: { documentId: string; creator?: { id: number } }) => p.documentId === projectId);
         setProjectOwnerId(owner);
       }
       if (taskData && formMode === 'create') {
-         const lastProgressLog = taskData.task_logs?.find((l: any) => l.Log_Type === 'Progress');
+         const lastProgressLog = taskData.task_logs?.find((l: TaskLog) => l.Log_Type === 'Progress') ;
          const currentProg = lastProgressLog ? lastProgressLog.progress_percentage : (taskData.progress || 0);
          setFormData(prev => ({ ...prev, progress: currentProg }));
       }
@@ -101,7 +150,7 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
     }
   };
 
-  const handleEditClick = (log: any) => {
+  const handleEditClick = (log: TaskLog) => {
     setFormMode('edit');
     setFormData({
       id: log.documentId,
@@ -120,6 +169,7 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
 
   const handleDeleteClick = async (logId: string) => {
     if (!confirm("ต้องการลบบันทึกนี้ใช่หรือไม่?")) return;
+    if (!task) return;
     try {
       setLoading(true);
       await deleteTaskLog(logId, task.documentId);
@@ -134,6 +184,25 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
 
     try {
       setSubmitting(true);
+      // ✨✨ LOGIC ใหม่: ตรวจสอบและบันทึกคำใหม่ ✨✨
+      const categoryName = `TaskLog_${formData.logType}`;
+      const descTrimmed = formData.description.trim();
+
+      // เงื่อนไข: ถ้าคำสั้นกว่า 50 ตัวอักษร (ไม่ใช่การพิมพ์เรียงความ) และยังไม่เคยมีในระบบ ให้แอบเซฟเลย!
+      if (descTrimmed.length > 0 && descTrimmed.length <= 50 && !dynamicSuggestions.includes(descTrimmed)) {
+          await createDictionaryWord(descTrimmed, categoryName);
+      }
+      // ถ้าเป็นปัญหา (Defect) ก็ดักเก็บคำจากช่องปัญหาด้วย
+      const problemTrimmed = formData.problems.trim();
+      if (formData.logType === 'Defect' && problemTrimmed.length > 0 && problemTrimmed.length <= 50) {
+          // แอบดึงคำศัพท์ปัญหามาเช็คก่อนว่ามีไหม
+          const defectWords = await fetchDictionary('TaskLog_Defect_Problem');
+          if (!defectWords.includes(problemTrimmed)) {
+              await createDictionaryWord(problemTrimmed, 'TaskLog_Defect_Problem');
+          }
+      }
+      // ✨✨ จบ LOGIC บันทึกคำใหม่ ✨✨
+
       const payload = {
           description: formData.description,
           problems: formData.problems,
@@ -160,7 +229,7 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
     } catch (error) { alert("บันทึกไม่สำเร็จ"); } finally { setSubmitting(false); }
   };
 
-  const TypeButton = ({ type, label, icon, activeColor }: { type: any, label: string, icon: string, activeColor: string }) => (
+  const TypeButton = ({ type, label, icon, activeColor }: { type: 'Progress' | 'Info' | 'Defect' | 'Requirement' | 'Observation', label: string, icon: string, activeColor: string }) => (
       <button 
           type="button"
           onClick={() => setFormData({ ...formData, logType: type })}
@@ -202,7 +271,7 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
         {(!task?.task_logs || task.task_logs.length === 0) ? (
           <div className="text-center py-12 flex flex-col items-center opacity-60"><div className="text-4xl mb-2">📋</div><p className="text-slate-400">{canManage ? "เริ่มบันทึกหน้างาน (Site Diary)\nกดปุ่มด้านล่างได้เลย" : "ยังไม่มีบันทึกการทำงาน"}</p></div>
         ) : (
-          task.task_logs.map((log: any) => {
+          task?.task_logs.map((log: TaskLog) => {
               const style = getTypeStyles(log.Log_Type || 'Info');
               const logDate = log.action_date ? new Date(log.action_date) : new Date(log.createdAt);
               
@@ -227,7 +296,7 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
                     {log.Log_Type === 'Progress' && (<div className="flex items-center gap-2 mb-2"><div className="h-1.5 w-24 bg-slate-200 rounded-full overflow-hidden"><div className="h-full bg-blue-500" style={{ width: `${log.progress_percentage}%` }}></div></div><span className="text-xs font-bold text-blue-700">{log.progress_percentage}%</span></div>)}
                     <p className={`text-sm mb-2 whitespace-pre-wrap leading-relaxed ${style.text}`}>{log.Description}</p>
                     {(log.problems_found || log.Log_Type === 'Defect') && log.problems_found && (<div className="bg-red-100/50 border border-red-200 p-2 rounded-lg text-xs text-red-700 mb-2 flex gap-2 items-start"><span>⚠️</span> <span>{log.problems_found}</span></div>)}
-                    {log.Media && log.Media.length > 0 && (<div className="grid grid-cols-2 gap-2 mt-3">{log.Media.map((img: any) => (<img key={img.id} src={img.url.startsWith('http') ? img.url : `${STRAPI_URL}${img.url}`} className="w-full h-24 object-cover rounded-lg bg-white border border-slate-100 shadow-sm" alt="Task Evidence"/>))}</div>)}
+                    {log.Media && log.Media.length > 0 && (<div className="grid grid-cols-2 gap-2 mt-3">{log.Media.map((img: MediaImage) => (<img key={img.id} src={img.url.startsWith('http') ? img.url : `${STRAPI_URL}${img.url}`} className="w-full h-24 object-cover rounded-lg bg-white border border-slate-100 shadow-sm" alt="Task Evidence"/>))}</div>)}
                   </div>
                 </div>
               );
@@ -275,19 +344,33 @@ export default function TaskLogFeedPage({ params }: { params: Promise<{ id: stri
                     {formData.logType === 'Progress' && (<div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 animate-in fade-in slide-in-from-top-2"><div className="flex justify-between text-xs text-blue-600 mb-2"><label className="font-bold">อัปเดตความคืบหน้า (%)</label><span className="font-bold text-2xl">{formData.progress}%</span></div><input type="range" min="0" max="100" step="5" value={formData.progress} onChange={e => setFormData({...formData, progress: Number(e.target.value)})} className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer accent-blue-600" /><p className="text-[10px] text-blue-400 mt-2 text-center">*ค่านี้จะถูกนำไปคำนวณ Progress รวมของงาน</p></div>)}
                     
                     {/* ✅ 4. Placeholder ปรับตาม Type */}
-                    <textarea 
+                    {/* ✅ 1. กล่องรายละเอียดการทำงาน (ใช้ SmartInput แบบหลายบรรทัด) */}
+                    <SmartInput 
+                        multiline={true}
+                        rows={4}
                         placeholder={
-                            formData.logType === 'Defect' ? "รายละเอียดปัญหา..." : 
+                            formData.logType === 'Defect' ? "รายละเอียดปัญหาที่พบหน้างาน..." : 
                             formData.logType === 'Requirement' ? "ระบุสเปควัสดุ หรือบรีฟจากลูกค้า (เช่น ปูน 240ksc)..." :
                             formData.logType === 'Observation' ? "สภาพหน้างานที่พบ (เช่น ดินทรุด, ทางแคบ)..." :
-                            "รายละเอียดการทำงาน..."
-                        } 
-                        className="w-full p-4 font-medium text-slate-700 bg-white border border-slate-200 rounded-2xl text-sm h-32 focus:ring-2 focus:ring-slate-400 outline-none resize-none shadow-sm" 
-                        value={formData.description} 
-                        onChange={e => setFormData({...formData, description: e.target.value})} 
+                            "อธิบายรายละเอียดการทำงาน..."
+                        }
+                        value={formData.description}
+                        onValueChange={(val) => setFormData({...formData, description: val})}
+                        suggestions={dynamicSuggestions} // 👈 เปลี่ยนจาก DICTIONARY[...] เป็นตัวนี้
                     />
 
-                    <div className={`transition-all ${formData.logType === 'Defect' ? 'block' : 'opacity-100'}`}><input type="text" placeholder={formData.logType === 'Defect' ? "⚠️ ระบุหัวข้อปัญหา (จำเป็น)*" : "⚠️ ปัญหาที่พบ (ถ้ามี)"} className={`w-full p-4 rounded-2xl text-sm outline-none transition-colors ${formData.logType === 'Defect' ? 'bg-red-50 border border-red-300 text-red-700 placeholder:text-red-400 focus:ring-2 focus:ring-red-200' : 'bg-slate-50 border border-slate-200 text-slate-600 focus:ring-2 focus:ring-slate-200'}`} value={formData.problems} onChange={e => setFormData({...formData, problems: e.target.value})} /></div>
+                    {/* ✅ 2. กล่องระบุหัวข้อปัญหา (ซ่อน/แสดงตามประเภท Log) */}
+                    <div className={`transition-all duration-300 overflow-hidden ${formData.logType === 'Defect' ? 'max-h-40 opacity-100 mt-2' : 'max-h-0 opacity-0'}`}>
+                        <SmartInput 
+                            multiline={false}
+                            placeholder="⚠️ ระบุหัวข้อปัญหา (จำเป็นต้องระบุ)*"
+                            value={formData.problems}
+                            onValueChange={(val) => setFormData({...formData, problems: val})}
+                            isError={true} // ให้กล่องเป็นสีแดงเสมอเพราะเป็นหน้าปัญหา
+                            suggestions={["โครงสร้าง", "สถาปัตย์", "ระบบไฟ", "ระบบน้ำ", "เครื่องจักร", "สภาพอากาศ", "วัสดุ"]} 
+                        />
+                    </div>
+
                     
                     <div className="space-y-2 pt-2"><label className="text-xs font-bold text-slate-500 ml-1">รูปภาพแนบ</label><div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">{formData.existingImages.map((img) => (<div key={img.id} className="relative flex-shrink-0 w-20 h-20 group"><img src={img.url.startsWith('http') ? img.url : `${STRAPI_URL}${img.url}`} className="w-full h-full object-cover rounded-xl border shadow-sm" /><button type="button" onClick={() => removeExistingImage(img.id)} className="absolute -top-2 -right-2 w-6 h-6 bg-white text-red-500 rounded-full text-xs shadow-md border border-slate-100 flex items-center justify-center">✕</button></div>))}{formData.newPhotos.map((file, idx) => (<div key={idx} className="relative flex-shrink-0 w-20 h-20 group"><img src={URL.createObjectURL(file)} className="w-full h-full object-cover rounded-xl border shadow-sm opacity-90" /><button type="button" onClick={() => removeNewPhoto(idx)} className="absolute -top-2 -right-2 w-6 h-6 bg-slate-700 text-white rounded-full text-xs shadow-md flex items-center justify-center">✕</button></div>))}
                     <label className="flex-shrink-0 w-20 h-20 bg-slate-50 hover:bg-slate-100 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center cursor-pointer text-slate-400 transition-colors">

@@ -570,6 +570,35 @@ export interface ApiDailyReportDailyReport extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiDictionaryDictionary extends Struct.CollectionTypeSchema {
+  collectionName: 'dictionaries';
+  info: {
+    displayName: 'Dictionary';
+    pluralName: 'dictionaries';
+    singularName: 'dictionary';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    category: Schema.Attribute.String;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::dictionary.dictionary'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    word: Schema.Attribute.String;
+  };
+}
+
 export interface ApiJobTaskJobTask extends Struct.CollectionTypeSchema {
   collectionName: 'job_tasks';
   info: {
@@ -1873,13 +1902,13 @@ export interface PluginUsersPermissionsUser
     blocked: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     confirmationToken: Schema.Attribute.String & Schema.Attribute.Private;
     confirmed: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
-    createdAt: Schema.Attribute.DateTime;
-    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
-      Schema.Attribute.Private;
     created_projects: Schema.Attribute.Relation<
       'oneToMany',
       'api::project-site.project-site'
     >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
     email: Schema.Attribute.Email &
       Schema.Attribute.Required &
       Schema.Attribute.SetMinMaxLength<{
@@ -1955,6 +1984,7 @@ declare module '@strapi/strapi' {
       'api::checklist.checklist': ApiChecklistChecklist;
       'api::customer.customer': ApiCustomerCustomer;
       'api::daily-report.daily-report': ApiDailyReportDailyReport;
+      'api::dictionary.dictionary': ApiDictionaryDictionary;
       'api::job-task.job-task': ApiJobTaskJobTask;
       'api::job.job': ApiJobJob;
       'api::location.location': ApiLocationLocation;

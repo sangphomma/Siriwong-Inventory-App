@@ -3,15 +3,45 @@
 
 import { useEffect, useState, use, useMemo } from "react";
 import Link from "next/link";
-import { fetchJobDetailsById, createJobTask, updateJobTask, deleteJobTask } from "@/services/api";
+import { 
+  fetchJobDetailsById, 
+  createJobTask, 
+  updateJobTask, 
+  deleteJobTask,
+  fetchDictionary,
+  createDictionaryWord
+} from "@/services/api";
 import { useAuth } from "@/app/context/AuthContext";
+import { SmartInput } from "@/app/components/SmartInput";
+
+// ==========================================
+// 🛠️ 1. สร้างพิมพ์เขียว (Interface) เพื่อกำจัด any
+// ==========================================
+interface JobTask {
+  id: number;
+  documentId: string;
+  task_name: string;
+  progress: number;
+  quantity: number;
+  unit: string;
+}
+
+interface JobData {
+  documentId: string;
+  title: string;
+  job_tasks: JobTask[];
+}
 
 export default function JobDetailsPage({ params }: { params: Promise<{ id: string, jobId: string }> }) {
   const { id: projectId, jobId } = use(params);
   const { user } = useAuth();
   
-  const [job, setJob] = useState<any>(null);
+  const [job, setJob] = useState<JobData | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // States for Dictionary (คำศัพท์แนะนำ)
+  const [taskNameSuggestions, setTaskNameSuggestions] = useState<string[]>([]);
+  const [unitSuggestions, setUnitSuggestions] = useState<string[]>([]);
   
   // States for Add/Edit
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -20,6 +50,9 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editTask, setEditTask] = useState({ documentId: "", name: "", qty: 1, unit: "จุด" });
 
+  // ==========================================
+  // 🔄 2. โหลดข้อมูล (Data Fetching)
+  // ==========================================
   const loadData = async () => {
     try {
       setLoading(true);
@@ -28,39 +61,74 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
-  useEffect(() => { if (jobId) loadData(); }, [jobId]);
+  useEffect(() => { 
+    if (jobId) loadData(); 
+  }, [jobId]);
 
-  // ✅ 1. Sort รายการ Task ตามชื่อแบบ numeric
+  // โหลดคำศัพท์จาก Strapi เมื่อเปิดหน้าเว็บ
+  useEffect(() => {
+    const loadDictionaries = async () => {
+      const names = await fetchDictionary("JobTask_Name"); // หมวดชื่องาน
+      const units = await fetchDictionary("JobTask_Unit"); // หมวดหน่วย
+      setTaskNameSuggestions(names);
+      setUnitSuggestions(units);
+    };
+    loadDictionaries();
+  }, []);
+
+  // ==========================================
+  // 🧮 3. คำนวณต่างๆ
+  // ==========================================
   const sortedTasks = useMemo(() => {
     if (!job?.job_tasks) return [];
-    return [...job.job_tasks].sort((a: any, b: any) => 
+    return [...job.job_tasks].sort((a: JobTask, b: JobTask) => 
       (a.task_name || "").localeCompare((b.task_name || ""), 'th', { numeric: true })
     );
   }, [job?.job_tasks]);
 
-  // ✅ 2. คำนวณ Progress แบบ Real-time Average
   const averageProgress = useMemo(() => {
     if (!job?.job_tasks || job.job_tasks.length === 0) return 0;
-    const total = job.job_tasks.reduce((sum: number, task: any) => sum + (task.progress || 0), 0);
+    const total = job.job_tasks.reduce((sum: number, task: JobTask) => sum + (task.progress || 0), 0);
     return Math.round(total / job.job_tasks.length);
   }, [job?.job_tasks]);
 
-  // --- ACTIONS ---
-  const handleAddTask = async (e: any) => {
+  // ==========================================
+  // ⚡ 4. Actions & Submit (เพิ่มระบบแอบบันทึกคำ)
+  // ==========================================
+  
+  // ฟังก์ชันช่วยบันทึกคำใหม่
+  const autoSaveDictionary = async (name: string, unit: string) => {
+    const nameTrimmed = name.trim();
+    if (nameTrimmed && nameTrimmed.length <= 50 && !taskNameSuggestions.includes(nameTrimmed)) {
+        await createDictionaryWord(nameTrimmed, "JobTask_Name");
+        setTaskNameSuggestions(prev => [...prev, nameTrimmed]);
+    }
+    const unitTrimmed = unit.trim();
+    if (unitTrimmed && unitTrimmed.length <= 20 && !unitSuggestions.includes(unitTrimmed)) {
+        await createDictionaryWord(unitTrimmed, "JobTask_Unit");
+        setUnitSuggestions(prev => [...prev, unitTrimmed]);
+    }
+  };
+
+  const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    await createJobTask(newTask.name, job.documentId, newTask.qty, newTask.unit);
+    await createJobTask(newTask.name, job!.documentId, newTask.qty, newTask.unit);
+    await autoSaveDictionary(newTask.name, newTask.unit); // แอบบันทึกคำศัพท์
+
     setIsAddOpen(false);
     setNewTask({ name: "", qty: 1, unit: "จุด" }); // Reset form
     loadData();
   };
 
-  const handleEditTask = async (e: any) => {
+  const handleEditTask = async (e: React.FormEvent) => {
     e.preventDefault();
     await updateJobTask(editTask.documentId, {
         task_name: editTask.name,
         quantity: editTask.qty,
         unit: editTask.unit
     });
+    await autoSaveDictionary(editTask.name, editTask.unit); // แอบบันทึกคำศัพท์
+
     setIsEditOpen(false);
     loadData();
   };
@@ -76,7 +144,7 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
     }
   };
 
-  const openEditModal = (task: any) => {
+  const openEditModal = (task: JobTask) => {
     setEditTask({
         documentId: task.documentId,
         name: task.task_name,
@@ -106,9 +174,8 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
       </div>
 
       <main className="p-4 space-y-3 max-w-lg mx-auto">
-        {sortedTasks.map((task: any) => (
+        {sortedTasks.map((task: JobTask) => (
           <div key={task.id} className="relative bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group overflow-hidden">
-            {/* พื้นที่หลักสำหรับกดเข้าไปดูรายละเอียด (Link) */}
             <Link 
               href={`/manage/project/${projectId}/job/${jobId}/task/${task.documentId}`}
               className="block p-5 active:bg-slate-50"
@@ -123,7 +190,6 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
               </div>
             </Link>
 
-            {/* ปุ่ม CRUD ลอยอยู่ด้านขวาบนของการ์ด */}
             <div className="absolute top-4 right-4 flex gap-1">
                 <button 
                   onClick={(e) => { e.preventDefault(); openEditModal(task); }} 
@@ -144,16 +210,41 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
 
       <button onClick={() => setIsAddOpen(true)} className="fixed bottom-6 right-6 w-14 h-14 bg-slate-900 text-white rounded-full shadow-xl text-3xl">+</button>
 
-      {/* Modal เพิ่มงาน */}
+      {/* ========================================== */}
+      {/* 🚀 Modal เพิ่มงาน (ใช้ SmartInput) */}
+      {/* ========================================== */}
       {isAddOpen && (
         <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center p-4 backdrop-blur-sm">
-          <form onSubmit={handleAddTask} className="bg-white w-full max-w-sm mx-auto rounded-3xl p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in duration-200">
+          <form onSubmit={handleAddTask} className="bg-white w-full max-w-sm mx-auto rounded-3xl p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto">
             <h3 className="font-bold text-slate-800">➕ เพิ่มรายการงาน</h3>
-            <input className="w-full p-3 bg-slate-50 border rounded-xl outline-none text-slate-900" placeholder="ชื่อรายการ (เช่น 1.งานเสา)" value={newTask.name} onChange={e => setNewTask({...newTask, name: e.target.value})} autoFocus required />
-            <div className="flex gap-2">
-                <input type="number" min="1" className="w-1/2 p-3 bg-slate-50 border rounded-xl outline-none text-slate-900" placeholder="จำนวน" value={newTask.qty} onChange={e => setNewTask({...newTask, qty: Number(e.target.value)})} required />
-                <input className="w-1/2 p-3 bg-slate-50 border rounded-xl outline-none text-slate-900" placeholder="หน่วย" value={newTask.unit} onChange={e => setNewTask({...newTask, unit: e.target.value})} required />
+            
+            <SmartInput 
+                multiline={false}
+                placeholder="ชื่อรายการ (เช่น 1.งานเสาเข็ม)"
+                value={newTask.name}
+                onValueChange={(val) => setNewTask({...newTask, name: val})}
+                suggestions={taskNameSuggestions}
+            />
+            
+            <div className="flex gap-2 items-start mt-2">
+                <input 
+                  type="number" min="1" required 
+                  className="w-1/3 p-4 font-medium text-slate-700 bg-white border border-slate-200 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-slate-400 shadow-sm" 
+                  placeholder="จำนวน" 
+                  value={newTask.qty} 
+                  onChange={e => setNewTask({...newTask, qty: Number(e.target.value)})} 
+                />
+                <div className="w-2/3">
+                    <SmartInput 
+                        multiline={false}
+                        placeholder="หน่วย (เช่น จุด, ตร.ม.)"
+                        value={newTask.unit}
+                        onValueChange={(val) => setNewTask({...newTask, unit: val})}
+                        suggestions={unitSuggestions}
+                    />
+                </div>
             </div>
+
             <div className="flex gap-2 pt-2">
                 <button type="button" onClick={() => setIsAddOpen(false)} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-medium">ยกเลิก</button>
                 <button type="submit" className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-medium">เพิ่มงาน</button>
@@ -162,16 +253,41 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
-      {/* Modal แก้ไขงาน (NEW) */}
+      {/* ========================================== */}
+      {/* 🚀 Modal แก้ไขงาน (ใช้ SmartInput) */}
+      {/* ========================================== */}
       {isEditOpen && (
         <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center p-4 backdrop-blur-sm">
-          <form onSubmit={handleEditTask} className="bg-white w-full max-w-sm mx-auto rounded-3xl p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in duration-200">
+          <form onSubmit={handleEditTask} className="bg-white w-full max-w-sm mx-auto rounded-3xl p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto">
             <h3 className="font-bold text-slate-800">✏️ แก้ไขรายการงาน</h3>
-            <input className="w-full p-3 bg-slate-50 border rounded-xl outline-none text-slate-900" placeholder="ชื่อรายการ" value={editTask.name} onChange={e => setEditTask({...editTask, name: e.target.value})} autoFocus required />
-            <div className="flex gap-2">
-                <input type="number" min="1" className="w-1/2 p-3 bg-slate-50 border rounded-xl outline-none text-slate-900" placeholder="จำนวน" value={editTask.qty} onChange={e => setEditTask({...editTask, qty: Number(e.target.value)})} required />
-                <input className="w-1/2 p-3 bg-slate-50 border rounded-xl outline-none text-slate-900" placeholder="หน่วย" value={editTask.unit} onChange={e => setEditTask({...editTask, unit: e.target.value})} required />
+            
+            <SmartInput 
+                multiline={false}
+                placeholder="ชื่อรายการ"
+                value={editTask.name}
+                onValueChange={(val) => setEditTask({...editTask, name: val})}
+                suggestions={taskNameSuggestions}
+            />
+
+            <div className="flex gap-2 items-start mt-2">
+                <input 
+                  type="number" min="1" required 
+                  className="w-1/3 p-4 font-medium text-slate-700 bg-white border border-slate-200 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-slate-400 shadow-sm" 
+                  placeholder="จำนวน" 
+                  value={editTask.qty} 
+                  onChange={e => setEditTask({...editTask, qty: Number(e.target.value)})} 
+                />
+                <div className="w-2/3">
+                    <SmartInput 
+                        multiline={false}
+                        placeholder="หน่วย"
+                        value={editTask.unit}
+                        onValueChange={(val) => setEditTask({...editTask, unit: val})}
+                        suggestions={unitSuggestions}
+                    />
+                </div>
             </div>
+
             <div className="flex gap-2 pt-2">
                 <button type="button" onClick={() => setIsEditOpen(false)} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-medium">ยกเลิก</button>
                 <button type="submit" className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-medium">บันทึก</button>
