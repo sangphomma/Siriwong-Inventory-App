@@ -1,7 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 // app/manage/page.tsx
 "use client";
 
-import { useEffect, useState, Suspense } from "react"; // ✅ นำเข้า Suspense
+import { useEffect, useState, Suspense } from "react"; 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { 
@@ -9,6 +11,8 @@ import {
   getAllUsers, createUser, updateUser, deleteUser , getDefaultRole
 } from "@/services/api"; 
 import { useAuth } from "../context/AuthContext";
+// ✅ Import SmartInput (ปรับ Path ให้ตรงกับโครงสร้างจริงของคุณกรนะครับ)
+import { SmartInput } from "@/app/components/SmartInput"; 
 
 const OFFICE_LAT = 13.879714702894447;
 const OFFICE_LNG = 100.63002504136652;
@@ -28,7 +32,6 @@ const Icons = {
   )
 };
 
-// ✅ แยกเนื้อหาหลักออกมาเป็น Component ย่อย
 function ManageProjectsContent() {
   const { user, logout, loading: authLoading } = useAuth();
   const searchParams = useSearchParams();
@@ -51,6 +54,10 @@ function ManageProjectsContent() {
   const [projectForm, setProjectForm] = useState({
     name: "", location: "", coordinates: "", distance: "", start: "", end: "", ownerId: "" 
   });
+
+  // ✨ เตรียม State สำหรับเก็บ Dictionary Suggestion (เผื่ออนาคตต่อ API มาลง)
+  const [nameSuggestions, setNameSuggestions] = useState<string[]>([]);
+  const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
 
   const isAdmin = user?.role?.name === 'Admin' || user?.role?.type === 'admin'; 
 
@@ -317,13 +324,29 @@ function ManageProjectsContent() {
                           </select>
                       </div>
                   )}
-                  <input placeholder="ชื่อโครงการ / ลูกค้า" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 outline-none font-bold text-slate-700" value={projectForm.name} onChange={e => setProjectForm({...projectForm, name: e.target.value})} />
+
+                  {/* ✅ เปลี่ยนเป็น SmartInput สำหรับชื่อโครงการ */}
+                  <SmartInput
+                      placeholder="ชื่อโครงการ / ลูกค้า"
+                      value={projectForm.name}
+                      onValueChange={val => setProjectForm({...projectForm, name: val})}
+                      suggestions={nameSuggestions} 
+                  />
+
                   <div className="flex gap-2">
                      <button type="button" onClick={handleGetLocation} className="bg-slate-100 text-slate-600 px-4 rounded-2xl border border-slate-200 text-xs font-black flex items-center gap-1 hover:bg-slate-200 active:scale-95 transition-all">{gpsLoading ? "..." : "📍 GPS"}</button>
                      <input placeholder="พิกัด (Lat, Lng)" className="flex-1 p-4 bg-slate-50 rounded-2xl border border-slate-200 text-sm font-bold outline-none" value={projectForm.coordinates} onChange={e => setProjectForm({...projectForm, coordinates: e.target.value})} />
                   </div>
                   <input placeholder="ระยะทางจากสาขา (กม.)" type="number" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 outline-none font-bold" value={projectForm.distance} onChange={e => setProjectForm({...projectForm, distance: e.target.value})} />
-                  <input placeholder="สถานที่ตั้ง" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 outline-none font-bold" value={projectForm.location} onChange={e => setProjectForm({...projectForm, location: e.target.value})} />
+                  
+                  {/* ✅ เปลี่ยนเป็น SmartInput สำหรับสถานที่ตั้ง */}
+                  <SmartInput
+                      placeholder="สถานที่ตั้ง"
+                      value={projectForm.location}
+                      onValueChange={val => setProjectForm({...projectForm, location: val})}
+                      suggestions={locationSuggestions} 
+                  />
+
                   <div className="grid grid-cols-2 gap-3">
                       <div><label className="text-[10px] font-black text-slate-400 pl-2 uppercase">วันเริ่ม</label><input type="date" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 text-sm font-bold outline-none" value={projectForm.start} onChange={e => setProjectForm({...projectForm, start: e.target.value})} /></div>
                       <div><label className="text-[10px] font-black text-slate-400 pl-2 uppercase">วันจบ</label><input type="date" className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 text-sm font-bold outline-none" value={projectForm.end} onChange={e => setProjectForm({...projectForm, end: e.target.value})} /></div>
@@ -383,7 +406,6 @@ function ManageProjectsContent() {
   );
 }
 
-// ✅ 3. สร้าง Main Component ที่ครอบด้วย Suspense
 export default function ManageProjectsPage() {
   return (
     <Suspense fallback={<div className="h-screen flex items-center justify-center text-slate-400 bg-slate-50">กำลังโหลดข้อมูล...</div>}>

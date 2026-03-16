@@ -1,5 +1,6 @@
-// @/app/survey/components/SurveyFeed.tsx
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
+// @/app/manage/survey/components/SurveyFeed.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react'; 
@@ -7,10 +8,15 @@ import {
   Camera, Image as ImageIcon, X, Send, 
   CheckCircle2, Loader2, Edit, Calculator, FileText, Plus, Trash2 
 } from 'lucide-react';
-// ✅ นำเข้า deleteSurveyLog มาใช้งานด้วย
-import { createSurveyLog, getSurveyLogs, deleteSurveyLog } from '@/services/api'; 
+import { 
+  createSurveyLog, getSurveyLogs, deleteSurveyLog,
+  // ✅ 1. เพิ่มฟังก์ชัน Dictionary
+  fetchDictionary, createDictionaryWord 
+} from '@/services/api'; 
 import { STRAPI_URL } from '@/services/config'; 
 import { ImageAnnotator } from './ImageAnnotator';
+// ✅ 2. Import SmartInput
+import { SmartInput } from "@/app/components/SmartInput";
 
 interface SurveyFeedProps {
   projectDocId: string;
@@ -37,12 +43,28 @@ export const SurveyFeed = ({ projectDocId, projectIntId }: SurveyFeedProps) => {
   const [logs, setLogs] = useState<any[]>([]);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
+  // ✅ 3. State สำหรับ Dictionary
+  const [topicSuggestions, setTopicSuggestions] = useState<string[]>([]);
+  const [descSuggestions, setDescSuggestions] = useState<string[]>([]);
+
   const fetchLogs = async () => {
     const data = await getSurveyLogs(projectDocId);
     setLogs(data || []);
   };
 
-  useEffect(() => { fetchLogs(); }, [projectDocId]);
+  const loadDictionaries = async () => {
+    try {
+      setTopicSuggestions(await fetchDictionary('survey_topic'));
+      setDescSuggestions(await fetchDictionary('survey_desc'));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => { 
+    fetchLogs(); 
+    loadDictionaries(); // โหลดคำแนะนำตอนเปิดหน้า
+  }, [projectDocId]);
 
   const calculateTotal = (items: AreaItem[]) => {
     return items.reduce((sum, item) => {
@@ -90,6 +112,21 @@ export const SurveyFeed = ({ projectDocId, projectIntId }: SurveyFeedProps) => {
 
     setLoading(true);
     try {
+      // ✅ 4. Auto-save Dictionary ของ Survey
+      const saveDictPromises = [];
+      const tTrimmed = topic.trim();
+      const dTrimmed = description.trim();
+
+      if (tTrimmed && !topicSuggestions.includes(tTrimmed)) {
+         saveDictPromises.push(createDictionaryWord(tTrimmed, 'survey_topic'));
+      }
+      if (dTrimmed && dTrimmed.length <= 50 && !descSuggestions.includes(dTrimmed)) {
+         saveDictPromises.push(createDictionaryWord(dTrimmed, 'survey_desc'));
+      }
+      if (saveDictPromises.length > 0) {
+         Promise.all(saveDictPromises).then(() => loadDictionaries()).catch(console.error);
+      }
+
       await createSurveyLog({
         topic: topic.trim(),
         description: finalDescription.trim(),
@@ -113,13 +150,10 @@ export const SurveyFeed = ({ projectDocId, projectIntId }: SurveyFeedProps) => {
     }
   };
 
-  // ✅ ฟังก์ชันสำหรับลบรายการ Survey
   const handleDeleteLog = async (documentId: string) => {
     if (!window.confirm('คุณต้องการลบบันทึกการสำรวจนี้ใช่หรือไม่?')) return;
-    
     try {
       await deleteSurveyLog(documentId);
-      // พอลบสำเร็จ ก็เรียก fetchLogs เพื่อโหลดข้อมูลใหม่ทันที
       fetchLogs();
     } catch (error) {
       console.error("Delete error:", error);
@@ -131,7 +165,6 @@ export const SurveyFeed = ({ projectDocId, projectIntId }: SurveyFeedProps) => {
     <div className="max-w-xl mx-auto p-4 pb-24 space-y-8">
       <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
         
-        {/* Tab เลือกโหมด */}
         <div className="flex bg-slate-100 p-1 rounded-2xl mb-6">
           <button onClick={() => setSurveyMode('general')} type="button"
             className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-all ${surveyMode === 'general' ? 'bg-white text-violet-600 shadow-sm' : 'text-slate-500'}`}>
@@ -145,33 +178,44 @@ export const SurveyFeed = ({ projectDocId, projectIntId }: SurveyFeedProps) => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-xs font-black text-slate-400 uppercase ml-1">หัวข้อ {surveyMode === 'area' && '(งานพื้นที่)'}</label>
-            <input value={topic} onChange={(e) => setTopic(e.target.value)} className="w-full mt-1 p-3 bg-slate-50 rounded-2xl text-slate-900 border-none focus:ring-2 focus:ring-violet-500" placeholder={surveyMode === 'area' ? "เช่น วัดพื้นที่ปูกระเบื้องห้องโถง..." : "ระบุหัวข้อปัญหา..."} />
+            {/* ✅ เปลี่ยนเป็น SmartInput */}
+            <SmartInput 
+              label={`หัวข้อ ${surveyMode === 'area' ? '(งานพื้นที่)' : ''}`}
+              value={topic} 
+              onValueChange={setTopic} 
+              placeholder={surveyMode === 'area' ? "เช่น วัดพื้นที่ปูกระเบื้องห้องโถง..." : "ระบุหัวข้อปัญหา..."}
+              suggestions={topicSuggestions}
+            />
           </div>
 
-          {/* โหมด: บันทึกทั่วไป */}
           {surveyMode === 'general' && (
             <>
               <div>
-                <label className="text-xs font-black text-slate-400 uppercase ml-1">ระดับความสำคัญ</label>
-                <div className="flex gap-2 mt-2">
+                <label className="text-xs font-black text-slate-400 uppercase ml-1 block mb-2">ระดับความสำคัญ</label>
+                <div className="flex gap-2">
                   {[{ label: 'ทั่วไป', value: 'Normal' }, { label: 'ข้อมูล', value: 'Info' }, { label: 'เร่งด่วน', value: 'Critical' }].map((lvl) => (
                     <button key={lvl.value} type="button" onClick={() => setSeverity(lvl.value)} className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${severity === lvl.value ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{lvl.label}</button>
                   ))}
                 </div>
               </div>
-              <div>
-                <label className="text-xs font-black text-slate-400 uppercase ml-1">รายละเอียด</label>
-                <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full mt-1 p-3 bg-slate-50 rounded-2xl text-slate-900 border-none focus:ring-2 focus:ring-violet-500" placeholder="อธิบายสิ่งที่พบ..." />
+              <div className="mt-4">
+                {/* ✅ เปลี่ยนเป็น SmartInput */}
+                <SmartInput 
+                  label="รายละเอียด"
+                  multiline={true}
+                  rows={3}
+                  value={description} 
+                  onValueChange={setDescription} 
+                  placeholder="อธิบายสิ่งที่พบ..."
+                  suggestions={descSuggestions}
+                />
               </div>
             </>
           )}
 
-          {/* โหมด: คำนวณพื้นที่ (Mobile-First Layout) */}
           {surveyMode === 'area' && (
             <div className="space-y-6 bg-emerald-50/50 p-4 rounded-3xl border border-emerald-100">
               
-              {/* ส่วนที่ 1: พื้นที่เพิ่ม */}
               <div>
                 <div className="flex justify-between items-center mb-3">
                   <label className="text-xs font-black text-emerald-700 uppercase ml-1">✅ ส่วนที่เพิ่ม (กว้าง x ยาว)</label>
@@ -192,7 +236,6 @@ export const SurveyFeed = ({ projectDocId, projectIntId }: SurveyFeedProps) => {
                 </div>
               </div>
 
-              {/* ส่วนที่ 2: พื้นที่หักออก */}
               <div className="pt-4 border-t border-emerald-200 border-dashed">
                 <div className="flex justify-between items-center mb-3">
                   <label className="text-xs font-black text-red-500 uppercase ml-1">❌ ส่วนที่หักออก (ประตู, หน้าต่าง)</label>
@@ -213,20 +256,25 @@ export const SurveyFeed = ({ projectDocId, projectIntId }: SurveyFeedProps) => {
                 </div>
               </div>
 
-              {/* สรุปยอดพื้นที่สุทธิ */}
               <div className="bg-emerald-600 text-white p-5 rounded-2xl shadow-lg flex justify-between items-center">
                 <span className="font-bold text-sm text-emerald-100">พื้นที่สุทธิ (Net Area)</span>
                 <span className="font-black text-3xl">{netArea.toFixed(2)} <span className="text-sm font-normal text-emerald-200">ตร.ม.</span></span>
               </div>
 
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-1">หมายเหตุเพิ่มเติม (ถ้ามี)</label>
-                <input value={description} onChange={(e) => setDescription(e.target.value)} className="w-full mt-1 p-4 bg-white rounded-2xl text-slate-900 border border-emerald-100 text-sm font-bold focus:ring-2 focus:ring-emerald-400 outline-none" placeholder="เช่น ใช้วัสดุกระเบื้องยางลายไม้..." />
+              <div className="mt-4">
+                {/* ✅ เปลี่ยนเป็น SmartInput */}
+                <SmartInput 
+                  label="หมายเหตุเพิ่มเติม (ถ้ามี)"
+                  multiline={false}
+                  value={description} 
+                  onValueChange={setDescription} 
+                  placeholder="เช่น ใช้วัสดุกระเบื้องยางลายไม้..."
+                  suggestions={descSuggestions}
+                />
               </div>
             </div>
           )}
 
-          {/* อัปโหลดรูปภาพ */}
           {files.length > 0 && (
             <div className="flex gap-2 overflow-x-auto py-2">
               {files.map((file, idx) => (
@@ -251,7 +299,6 @@ export const SurveyFeed = ({ projectDocId, projectIntId }: SurveyFeedProps) => {
         </form>
       </div>
 
-      {/* --- ส่วนแสดงประวัติ --- */}
       <div className="space-y-4">
         <h3 className="font-black text-slate-800 ml-2 border-l-4 border-violet-600 pl-3 text-lg">รายการบันทึกทั้งหมด</h3>
         {logs.length === 0 ? (
@@ -266,8 +313,6 @@ export const SurveyFeed = ({ projectDocId, projectIntId }: SurveyFeedProps) => {
                   </span>
                   <span className="text-[10px] text-slate-400 font-bold">{new Date(log.createdAt).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
-                
-                {/* ✅ ปุ่มลบ (จะอยู่มุมขวาบนของแต่ละการ์ด) */}
                 <button 
                   onClick={() => handleDeleteLog(log.documentId)}
                   className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors active:scale-95"
@@ -275,7 +320,6 @@ export const SurveyFeed = ({ projectDocId, projectIntId }: SurveyFeedProps) => {
                 >
                   <Trash2 size={16} />
                 </button>
-
               </div>
               
               <h4 className="font-bold text-slate-800 text-lg pr-8">{log.topic}</h4>
@@ -294,7 +338,6 @@ export const SurveyFeed = ({ projectDocId, projectIntId }: SurveyFeedProps) => {
         )}
       </div>
 
-      {/* Modal ต่างๆ */}
       {annotationImage && (
         <ImageAnnotator imageUrl={annotationImage} onSave={(blob) => { const file = new File([blob], `edit_${Date.now()}.jpg`, { type: 'image/jpeg' }); if (editingIndex !== null) { const updated = [...files]; updated[editingIndex] = file; setFiles(updated); } setAnnotationImage(null); setEditingIndex(null); }} onClose={() => { setAnnotationImage(null); setEditingIndex(null); }} />
       )}
