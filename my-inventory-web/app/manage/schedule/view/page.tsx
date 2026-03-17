@@ -269,17 +269,18 @@ export default function SchedulePage() {
   
   const handleDelete = async (id: string) => { if (confirm("ลบไหม?")) { await deleteUserActivity(id); fetchActivities(); } };
   
-  // ✨ อัปเดตฟังก์ชันเรียกข้อมูล Report ให้ดึงทั้ง Line และ JSON
-  const handleOpenReport = async () => { 
-    if (!user) return; 
-    const lineText = await generateLineReport(user.id, date); 
-    const jsonText = await generateAIPromptJSON(user.id, date);
-    
-    setReportText(lineText); 
-    setJsonPromptText(jsonText);
-    setActiveTab('line'); // เปิดมาให้เห็น Tab Line ก่อน
-    setIsReportOpen(true); 
-  };
+  const handleOpenReport = () => { 
+  if (!user) return; 
+  const userName = user.username || "Siriwong Member";
+
+  // ✅ เปลี่ยนมาส่งค่า 3 ตัว (userName, date, activities) เพื่อให้ตรงกับกฎใหม่
+  const lineText = generateLineReport(userName, date, activities); 
+  const jsonText = generateAIPromptJSON(userName, date, activities);
+
+  setReportText(lineText); 
+  // *หมายเหตุ: ถ้าโค้ดเดิมมีบรรทัด setIsReportOpen(true); หรือ setJsonPromptText อยู่ด้านล่าง ก็พิมพ์ต่อท้ายไว้ได้เลยครับ
+  setIsReportOpen(true);
+};
   
   const copyToClipboard = () => { 
     const textToCopy = activeTab === 'line' ? reportText : jsonPromptText;
